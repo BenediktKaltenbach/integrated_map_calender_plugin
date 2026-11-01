@@ -9,6 +9,7 @@ namespace CalendarPlugin\Map;
 use CalendarPlugin\Events\Events;
 use CalendarPlugin\Events\Format;
 use CalendarPlugin\Events\Geo;
+use CalendarPlugin\Events\Pages;
 use CalendarPlugin\Events\Parser;
 use CalendarPlugin\Plugin;
 use CalendarPlugin\Review;
@@ -298,8 +299,9 @@ final class Map {
 				$lines[] = '<em>' . esc_html( Parser::status_labels()[ $d['status'] ] ?? $d['status'] ) . '</em>';
 			}
 			$links = array();
-			if ( ! empty( $d['fields']['info'] ) ) {
-				$links[] = '<a href="' . esc_url( $d['fields']['info'] ) . '">' . esc_html__( 'Info', 'calendar-plugin' ) . '</a>';
+			$info  = Pages::info_url( $id, $d['fields'] );
+			if ( '' !== $info ) {
+				$links[] = '<a href="' . esc_url( $info ) . '">' . esc_html__( 'Info', 'calendar-plugin' ) . '</a>';
 			}
 			if ( ! empty( $d['fields']['registration'] ) ) {
 				$links[] = '<a href="' . esc_url( $d['fields']['registration'] ) . '">' . esc_html__( 'Register', 'calendar-plugin' ) . '</a>';

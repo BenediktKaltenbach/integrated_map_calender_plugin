@@ -55,6 +55,27 @@
 	.calp-event__actions { grid-column: 2; justify-content: flex-start; }
 }
 
+/* ── Event page: info box ────────────────────────────────────────── */
+.calp-event__title a { color: inherit; text-decoration: none; }
+.calp-event__title a:hover { text-decoration: underline; text-decoration-color: var(--calp-accent); }
+.calp-eventinfo { display: grid; grid-template-columns: 1fr; background: var(--calp-cream); border-top: 5px solid var(--calp-cat, var(--calp-accent)); border-radius: var(--calp-radius); overflow: hidden; margin: 0 0 2em; }
+.calp-eventinfo.has-image { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+.calp-eventinfo__image { margin: 0; }
+.calp-eventinfo__image img { display: block; width: 100%; height: 100%; max-height: 420px; object-fit: cover; }
+.calp-eventinfo__body { padding: 1.2em 1.5em; }
+.calp-eventinfo__notice { margin: 0 0 .8em; padding: .4em .8em; border-radius: 4px; background: #fbe7e7; color: #8a1f1f; font-weight: 600; }
+.calp-eventinfo__list { display: grid; grid-template-columns: max-content 1fr; gap: .45em 1.2em; margin: 0; }
+.calp-eventinfo__list dt { font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--calp-muted); font-size: .85em; padding-top: .15em; }
+.calp-eventinfo__list dd { margin: 0; color: var(--calp-text); }
+.calp-eventinfo__actions { display: flex; flex-wrap: wrap; gap: .5em; margin: 1.2em 0 0; }
+.calp-eventinfo.is-removed .calp-eventinfo__list, .calp-eventinfo.is-cancelled .calp-eventinfo__list { opacity: .7; }
+@media (max-width: 640px) {
+	.calp-eventinfo.has-image { grid-template-columns: 1fr; }
+	.calp-eventinfo__image img { max-height: 260px; }
+	.calp-eventinfo__list { grid-template-columns: 1fr; gap: 0; }
+	.calp-eventinfo__list dd { margin-bottom: .6em; }
+}
+
 /* ── Explorer tabs ───────────────────────────────────────────────── */
 .calp-tabs { display: flex; gap: .3em; border-bottom: 4px solid var(--calp-accent); margin-bottom: 1.2em; }
 .calp-tab { padding: .55em 1.4em; border-radius: 6px 6px 0 0; background: var(--calp-cream); color: var(--calp-dark) !important; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; text-decoration: none !important; }

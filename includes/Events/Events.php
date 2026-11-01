@@ -50,6 +50,7 @@ final class Events {
 			array( self::class, 'review_details' ),
 			static function ( int $id ) {
 				Geo::check( $id );
+				Pages::check( $id );
 			}
 		);
 	}
@@ -122,6 +123,10 @@ final class Events {
 				$rows[ $label ] = $d['fields'][ $key ];
 			}
 		}
+		$img = (int) get_post_meta( $id, '_calp_image_upload', true );
+		if ( $img ) {
+			$rows[ __( 'Picture', 'calendar-plugin' ) ] = (string) wp_get_attachment_url( $img );
+		}
 		$text = trim( wp_strip_all_tags( (string) get_post_field( 'post_content', $id ) ) );
 		if ( '' !== $text ) {
 			$rows[ __( 'Description', 'calendar-plugin' ) ] = $text;
@@ -157,6 +162,7 @@ final class Events {
 			'calp_location' => __( 'Location', 'calendar-plugin' ),
 			'calp_source'   => __( 'Source', 'calendar-plugin' ),
 			'calp_map'      => __( 'Map', 'calendar-plugin' ),
+			'calp_page'     => __( 'Page', 'calendar-plugin' ),
 			'calp_notes'    => __( 'Notes', 'calendar-plugin' ),
 		);
 	}
@@ -187,6 +193,9 @@ final class Events {
 				if ( $err ) {
 					echo '<br><span style="color:#b32d2e">⚠ ' . esc_html( $err ) . '</span>';
 				}
+				break;
+			case 'calp_page':
+				echo wp_kses_post( Pages::column( $id ) );
 				break;
 			case 'calp_notes':
 				$notes = array();
@@ -335,6 +344,7 @@ final class Events {
 			self::store_local( $id, $in );
 		}
 		Geo::check( $id );
+		Pages::check( $id );
 	}
 
 	/**

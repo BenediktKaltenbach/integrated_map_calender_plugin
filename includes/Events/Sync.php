@@ -206,6 +206,7 @@ final class Sync {
 
 		foreach ( array_keys( $seen ) as $key ) {
 			Geo::check( (int) ( self::$index[ $key ]['id'] ?? 0 ) );
+			Pages::check( (int) ( self::$index[ $key ]['id'] ?? 0 ) );
 		}
 
 		return array(

@@ -7,6 +7,7 @@ namespace CalendarPlugin;
 
 use CalendarPlugin\Events\Events;
 use CalendarPlugin\Events\Form;
+use CalendarPlugin\Events\Pages;
 use CalendarPlugin\Events\Renderer;
 use CalendarPlugin\Events\Sync;
 use CalendarPlugin\Map\Map;
@@ -28,6 +29,7 @@ final class Plugin {
 		add_action( 'template_redirect', array( Review::class, 'handle_link' ), 1 );
 		add_action( 'template_redirect', array( Form::class, 'handle' ), 1 );
 		add_action( 'template_redirect', array( Articles::class, 'handle_submission' ), 1 );
+		add_action( 'template_redirect', array( Contact::class, 'handle_submission' ), 1 );
 		add_action( 'admin_post_nopriv_calp_cron', array( Sync::class, 'cron_url' ) );
 		add_action( 'admin_post_calp_cron', array( Sync::class, 'cron_url' ) );
 
@@ -38,6 +40,7 @@ final class Plugin {
 		if ( is_admin() ) {
 			Settings::admin();
 			Events::admin();
+			Pages::admin();
 			Map::admin();
 			Countries::admin();
 			Articles::admin();
@@ -77,6 +80,8 @@ final class Plugin {
 		add_shortcode( 'calp_countries', array( Countries::class, 'shortcode' ) );
 		add_shortcode( 'calp_articles', array( Articles::class, 'shortcode_list' ) );
 		add_shortcode( 'calp_article_form', array( Articles::class, 'shortcode_form' ) );
+		add_shortcode( 'calp_event_info', array( Pages::class, 'shortcode' ) );
+		add_shortcode( 'calp_contact_form', array( Contact::class, 'shortcode' ) );
 		add_shortcode( 'calp_explorer', array( Explorer::class, 'shortcode' ) );
 	}
 

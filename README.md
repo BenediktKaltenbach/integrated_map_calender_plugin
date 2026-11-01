@@ -7,7 +7,9 @@ WordPress plugin that brings together what [DTRV-Termine](https://github.com/Ben
 - **Map and calendar in tabs** (`[calp_explorer]`), each tab with its own address (`#map`, `#calendar`).
 - **Member countries** with round flags and contact persons, shown separately (`[calp_countries]`).
 - **Articles** (news, blog, history …) with a public submission form.
+- **A page per event**: every upcoming event gets a normal WordPress page – info box (date, place, picture, buttons) on top, the description below, editable like any page. *Info* leads to the external info link if there is one, otherwise to this page.
 - **Review by mail** for event suggestions, place suggestions and articles: every reviewer of the area gets personal *Approve / Edit / Reject* links that work without logging in.
+- **Contact form** mailed to a configurable list of addresses.
 
 The UI is English and translatable (text domain `calendar-plugin`).
 
@@ -23,9 +25,9 @@ Requires PHP 8.1+ and WordPress 6.5+.
 
 | Tab | What |
 | --- | --- |
-| Events | Categories: name, slug, colour, Google Calendar iCal address (optional), shown on map. Event suggestions on/off. |
+| Events | Categories: name, slug, colour, Google Calendar iCal address (optional), shown on map. Event suggestions on/off. Event pages on/off and their parent page. |
 | Map | Centre, zoom, height, place suggestions on/off, events on the map on/off. |
-| Review | Reviewer addresses per area (one per line; empty = site admin), sender name. |
+| Review | Reviewer addresses per area and contact form recipients (one per line; empty = site admin), sender name. |
 | Countries & articles | Article categories, public contact address and text for countries without a representative. |
 | Shortcodes & tools | Sync now, cron URL for the host, shortcode overview, import from the old "IKSA Site Kit". |
 
@@ -42,6 +44,8 @@ Let the host call the cron URL hourly (All-Inkl: KAS › Tools › Cronjobs). WP
 | `[calp_countries contacts="1"]` | Countries as round flags, optionally with contacts |
 | `[calp_articles category="news" count="6"]` | Article cards |
 | `[calp_article_form]` | Send in an article |
+| `[calp_contact_form]` | General contact form |
+| `[calp_event_info id="123"]` | Info box of an event (placed on event pages automatically) |
 
 ## Entering events in Google Calendar
 
@@ -68,6 +72,12 @@ Coordinates: 49.52, 17.58
 
 Without coordinates the location text is looked up at OpenStreetMap (Nominatim: max. 15 lookups per sync, 1 per second, cached 30 days). Events deleted in Google are only flagged; an empty feed is only trusted the second time in a row.
 
+## Event pages
+
+After each sync (and when a suggestion is approved) every upcoming, not cancelled event without a page gets one – published, below the parent page set under *Events* (pick the calendar page, so new pages do not land in menus that add top-level pages automatically). Each event gets its page only once: a deleted page does not come back. In the event list use *Create page* for older events.
+
+The page starts with the block `[calp_event_info]`, which always shows the current date, place, category, status and the *Register* / *Event website* buttons, followed by the description as normal paragraphs. The picture comes from the suggestion form or the `Image:` line (direct image address or a Google Drive link shared with "anyone with the link"); it becomes the featured image unless the editors chose another one.
+
 ## Review by mail
 
 A submission is saved as *pending* and mailed to all reviewers of its area. Links are signed per reviewer with a per-submission secret; a GET only shows a confirmation page (mail scanners open links), the button decides. **Edit** opens a small form to fix title and text, optionally approving in the same step. After the first decision the secret is deleted, so all links stop working, the other reviewers get a short note, and the submitter gets a thank-you mail – after which their address is deleted. Pending posts can also be approved in the admin list (row action *Approve*).
@@ -83,4 +93,4 @@ The "Check" action lints PHP (8.1 and 8.5) and JavaScript (no regex lookbehind �
 
 ## Not yet ported from DTRV-Termine
 
-Automatic detail pages/posts per event, featured images from calendar attachments, writing accepted suggestions to Google Calendar, the difficulty class (Art | Bergfaktor), Gutenberg blocks (use the shortcodes in a Shortcode block for now), German translation file.
+Posts for the start page per event, featured images from calendar *attachments* (the `Image:` line works), writing accepted suggestions to Google Calendar, the difficulty class (Art | Bergfaktor), Gutenberg blocks (use the shortcodes in a Shortcode block for now), German translation file.

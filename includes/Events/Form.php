@@ -37,7 +37,7 @@ final class Form {
 			<?php elseif ( '' !== $error ) : ?>
 				<p class="calp-notice calp-notice--error"><?php echo esc_html( $error ); ?></p>
 			<?php endif; ?>
-			<form method="post" action="<?php echo esc_url( remove_query_arg( array( 'calp_sent', 'calp_error' ) ) ); ?>#calp-event-form">
+			<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( remove_query_arg( array( 'calp_sent', 'calp_error' ) ) ); ?>#calp-event-form">
 				<input type="hidden" name="calp_form" value="event">
 				<input type="hidden" name="calp_t" value="<?php echo esc_attr( $time . '.' . self::sign( $time ) ); ?>">
 				<p class="calp-hp" aria-hidden="true"><label>Website <input type="text" name="calp_website" tabindex="-1" autocomplete="off"></label></p>
@@ -64,6 +64,7 @@ final class Form {
 					<p><label><?php esc_html_e( 'Registration link', 'calendar-plugin' ); ?><br><input type="url" name="calp[registration]" placeholder="https://"></label></p>
 				</div>
 				<p><label><?php esc_html_e( 'Description', 'calendar-plugin' ); ?><br><textarea name="calp[description]" rows="4" maxlength="3000"></textarea></label></p>
+				<p><label><?php esc_html_e( 'Picture (JPG, PNG or WebP, max. 8 MB)', 'calendar-plugin' ); ?><br><input type="file" name="calp_image" accept="image/jpeg,image/png,image/webp"></label></p>
 				<div class="calp-form__row">
 					<p><label><?php esc_html_e( 'Your name', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[name]" required maxlength="80"></label></p>
 					<p><label><?php esc_html_e( 'Your e-mail', 'calendar-plugin' ); ?> *<br><input type="email" name="calp[email]" required></label></p>
@@ -139,10 +140,31 @@ final class Form {
 		}
 		update_post_meta( $id, '_calp_submitter_name', $name );
 		update_post_meta( $id, '_calp_submitter_email', $email );
+		self::picture( $id );
 		Plugin::count_submission( 'event' );
 		Review::submit( $id, 'events' );
 
 		wp_safe_redirect( add_query_arg( 'calp_sent', 'event', $back ) . '#calp-event-form' );
 		exit;
+	}
+
+	/** Optional picture: goes to the media library, becomes the featured image of the event page. */
+	private static function picture( int $id ): void {
+		// phpcs:disable WordPress.Security.NonceVerification, WordPress.Security.ValidatedSanitizedInput -- see handle().
+		if ( empty( $_FILES['calp_image']['name'] ) || UPLOAD_ERR_OK !== (int) $_FILES['calp_image']['error'] ) {
+			return;
+		}
+		$type = wp_check_filetype_and_ext( $_FILES['calp_image']['tmp_name'], $_FILES['calp_image']['name'] );
+		if ( (int) $_FILES['calp_image']['size'] > 8 * MB_IN_BYTES || ! in_array( $type['type'], array( 'image/jpeg', 'image/png', 'image/webp' ), true ) ) {
+			return;
+		}
+		// phpcs:enable
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		$att = media_handle_upload( 'calp_image', $id );
+		if ( ! is_wp_error( $att ) ) {
+			update_post_meta( $id, '_calp_image_upload', $att );
+		}
 	}
 }

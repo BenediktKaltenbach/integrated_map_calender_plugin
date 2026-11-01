@@ -134,8 +134,9 @@ final class Renderer {
 		}
 
 		$buttons = '';
-		if ( ! empty( $f['info'] ) ) {
-			$buttons .= self::button( $f['info'], __( 'Info', 'calendar-plugin' ), ! empty( $f['registration'] ) );
+		$info    = Pages::info_url( $id, $f );
+		if ( '' !== $info ) {
+			$buttons .= self::button( $info, __( 'Info', 'calendar-plugin' ), ! empty( $f['registration'] ) );
 		}
 		if ( ! empty( $f['registration'] ) && 'cancelled' !== $status && $d['end'] > time() ) {
 			$buttons .= self::button( $f['registration'], __( 'Register', 'calendar-plugin' ), false );
@@ -154,7 +155,7 @@ final class Renderer {
 			esc_html( $day ),
 			esc_html( $mon ),
 			$flag,
-			esc_html( get_the_title( $id ) ),
+			'' !== Pages::page_url( $id ) ? '<a href="' . esc_url( Pages::page_url( $id ) ) . '">' . esc_html( get_the_title( $id ) ) . '</a>' : esc_html( get_the_title( $id ) ),
 			implode( ' · ', $meta ),
 			$more,
 			$buttons

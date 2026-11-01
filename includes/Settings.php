@@ -49,6 +49,8 @@ final class Settings {
 				),
 			),
 			'event_form'       => 1,
+			'event_pages'      => 1,
+			'event_page_parent' => 0,
 			'map_lat'          => 50.0,
 			'map_lng'          => 12.0,
 			'map_zoom'         => 4,
@@ -61,6 +63,7 @@ final class Settings {
 				'articles' => '',
 			),
 			'mail_from_name'   => '',
+			'contact_recipients' => '',
 			'article_categories' => array(
 				'history' => 'History',
 				'blog'    => 'Blog',
@@ -91,9 +94,17 @@ final class Settings {
 
 	/** Reviewer addresses for an area; falls back to the site admin address. */
 	public static function reviewers( string $area ): array {
-		$raw   = (string) ( self::get()['reviewers'][ $area ] ?? '' );
+		return self::mail_list( (string) ( self::get()['reviewers'][ $area ] ?? '' ) );
+	}
+
+	/** Recipients of the contact form; falls back to the site admin address. */
+	public static function contact_recipients(): array {
+		return self::mail_list( (string) self::get()['contact_recipients'] );
+	}
+
+	private static function mail_list( string $raw ): array {
 		$mails = array_values( array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', $raw ) ), 'is_email' ) );
-		return $mails ? array_unique( $mails ) : array( (string) get_option( 'admin_email' ) );
+		return $mails ? array_values( array_unique( $mails ) ) : array( (string) get_option( 'admin_email' ) );
 	}
 
 	public static function cron_url(): string {
@@ -166,7 +177,9 @@ final class Settings {
 				);
 			}
 			$s['event_categories'] = array_values( $cats );
-			$s['event_form']       = empty( $in['event_form'] ) ? 0 : 1;
+			$s['event_form']        = empty( $in['event_form'] ) ? 0 : 1;
+			$s['event_pages']       = empty( $in['event_pages'] ) ? 0 : 1;
+			$s['event_page_parent'] = absint( $in['event_page_parent'] ?? 0 );
 		}
 
 		if ( 'map' === $tab ) {
@@ -183,7 +196,9 @@ final class Settings {
 				$mails                     = array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', (string) ( $in['reviewers'][ $area ] ?? '' ) ) ), 'is_email' );
 				$s['reviewers'][ $area ] = implode( "\n", array_unique( $mails ) );
 			}
-			$s['mail_from_name'] = sanitize_text_field( $in['mail_from_name'] ?? '' );
+			$mails                   = array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', (string) ( $in['contact_recipients'] ?? '' ) ) ), 'is_email' );
+			$s['contact_recipients'] = implode( "\n", array_unique( $mails ) );
+			$s['mail_from_name']     = sanitize_text_field( $in['mail_from_name'] ?? '' );
 		}
 
 		if ( 'content' === $tab ) {
@@ -272,6 +287,17 @@ final class Settings {
 			}
 			echo '</tbody></table>';
 			printf( '<p><label><input type="checkbox" name="%s" value="1"%s> %s</label></p>', $n( 'event_form' ), checked( ! empty( $s['event_form'] ), true, false ), esc_html__( 'Allow visitors to suggest events (form [calp_event_form])', 'calendar-plugin' ) );
+			printf( '<p><label><input type="checkbox" name="%s" value="1"%s> %s</label></p>', $n( 'event_pages' ), checked( ! empty( $s['event_pages'] ), true, false ), esc_html__( 'Create a page for every upcoming event (info box with date, place, picture and buttons, then the description – edit it like any page). "Info" leads to the external info link if there is one, otherwise to this page.', 'calendar-plugin' ) );
+			echo '<p><label>' . esc_html__( 'Event pages below:', 'calendar-plugin' ) . ' ';
+			wp_dropdown_pages(
+				array(
+					'name'              => self::OPTION . '[event_page_parent]', // phpcs:ignore WordPress.Security.EscapeOutput -- escaped by wp_dropdown_pages.
+					'selected'          => (int) $s['event_page_parent'],
+					'show_option_none'  => __( '(top level)', 'calendar-plugin' ),
+					'option_none_value' => 0,
+				)
+			);
+			echo '</label></p><p class="description">' . esc_html__( 'E.g. the calendar page, so event addresses read /calendar/event-name/ and new pages are not added to menus automatically.', 'calendar-plugin' ) . '</p>';
 		}
 
 		if ( 'map' === $tab ) {
@@ -295,6 +321,13 @@ final class Settings {
 					esc_textarea( (string) $s['reviewers'][ $area ] )
 				);
 			}
+			printf(
+				'<tr><th>%s</th><td><textarea rows="4" cols="50" name="%s">%s</textarea><p class="description">%s</p></td></tr>',
+				esc_html__( 'Contact form recipients', 'calendar-plugin' ),
+				$n( 'contact_recipients' ),
+				esc_textarea( (string) $s['contact_recipients'] ),
+				esc_html__( 'Messages from [calp_contact_form] go to every address here (reply goes straight to the sender). One per line; empty = the site admin address.', 'calendar-plugin' )
+			);
 			printf( '<tr><th>%s</th><td><input type="text" class="regular-text" name="%s" value="%s" placeholder="%s"></td></tr>', esc_html__( 'Sender name in mails', 'calendar-plugin' ), $n( 'mail_from_name' ), esc_attr( $s['mail_from_name'] ), esc_attr( get_bloginfo( 'name' ) ) );
 			echo '</table>';
 		}
@@ -334,6 +367,8 @@ final class Settings {
 			'[calp_countries contacts="1"]'                           => __( 'Member countries as round flags, optionally with contact details.', 'calendar-plugin' ),
 			'[calp_articles category="news" count="6"]'               => __( 'Article cards.', 'calendar-plugin' ),
 			'[calp_article_form]'                                     => __( 'Public form to send in an article.', 'calendar-plugin' ),
+			'[calp_event_info id="123"]'                              => __( 'Info box of an event (date, place, picture, buttons). Put on event pages automatically.', 'calendar-plugin' ),
+			'[calp_contact_form]'                                     => __( 'General contact form, mailed to the contact recipients (tab Review).', 'calendar-plugin' ),
 		);
 		foreach ( $codes as $code => $text ) {
 			printf( '<tr><td><code>%s</code></td><td>%s</td></tr>', esc_html( $code ), esc_html( $text ) );
