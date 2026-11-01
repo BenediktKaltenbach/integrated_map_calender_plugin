@@ -104,6 +104,32 @@ final class Plugin {
 		return 1 === $ok;
 	}
 
+	/**
+	 * Hidden fields every public form needs: where to come back to, and a honeypot.
+	 * The honeypot has no name that browsers or password managers would autofill
+	 * (Firefox for Android filled the former "website" field, so real submissions were dropped as spam).
+	 */
+	public static function form_fields(): string {
+		return '<input type="hidden" name="calp_back" value="' . esc_attr( remove_query_arg( array( 'calp_sent', 'calp_error' ) ) ) . '">'
+			. '<p class="calp-hp" aria-hidden="true"><label>Leave this field empty <input type="text" name="calp_hp_x7" value="" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore></label></p>';
+	}
+
+	public static function is_bot(): bool {
+		return '' !== trim( (string) wp_unslash( $_POST['calp_hp_x7'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification
+	}
+
+	/**
+	 * Page to return to after a form was sent. The form tells us (calp_back); wp_get_referer() is no help
+	 * because it is empty when the referrer equals the current address – which it always does here.
+	 */
+	public static function back_url(): string {
+		$back = wp_validate_redirect( (string) wp_unslash( $_POST['calp_back'] ?? '' ), '' ); // phpcs:ignore WordPress.Security.NonceVerification
+		if ( '' === $back ) {
+			$back = wp_validate_redirect( (string) wp_get_raw_referer(), home_url( '/' ) );
+		}
+		return remove_query_arg( array( 'calp_sent', 'calp_error' ), $back );
+	}
+
 	/** Simple spam protection shared by all public forms: max. $max valid submissions per IP and hour. */
 	public static function rate_limited( string $area, int $max = 5 ): bool {
 		$key = 'calp_rate_' . $area . '_' . md5( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );

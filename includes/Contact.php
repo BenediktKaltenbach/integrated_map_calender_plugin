@@ -25,7 +25,7 @@ final class Contact {
 			<form method="post" action="<?php echo esc_url( remove_query_arg( array( 'calp_sent', 'calp_error' ) ) ); ?>#calp-contact-form">
 				<input type="hidden" name="calp_form" value="contact">
 				<input type="hidden" name="calp_t" value="<?php echo esc_attr( $time . '.' . self::sign( $time ) ); ?>">
-				<p class="calp-hp" aria-hidden="true"><label>Website <input type="text" name="calp_website" tabindex="-1" autocomplete="off"></label></p>
+				<?php echo Plugin::form_fields(); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside. ?>
 				<div class="calp-form__row">
 					<p><label><?php esc_html_e( 'Your name', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[name]" required maxlength="80" autocomplete="name"></label></p>
 					<p><label><?php esc_html_e( 'Your e-mail', 'calendar-plugin' ); ?> *<br><input type="email" name="calp[email]" required autocomplete="email"></label></p>
@@ -48,7 +48,7 @@ final class Contact {
 		if ( 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) || 'contact' !== ( $_POST['calp_form'] ?? '' ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return;
 		}
-		$back = remove_query_arg( array( 'calp_sent', 'calp_error' ), wp_get_referer() ?: home_url( '/' ) );
+		$back = Plugin::back_url();
 		$done = static function ( string $arg, string $value ) use ( $back ) {
 			wp_safe_redirect( add_query_arg( $arg, rawurlencode( $value ), $back ) . '#calp-contact-form' );
 			exit;
@@ -56,7 +56,7 @@ final class Contact {
 		// phpcs:disable WordPress.Security.NonceVerification -- public form, protected by time token and honeypot.
 		$token = explode( '.', (string) ( $_POST['calp_t'] ?? '' ) );
 		$in    = wp_unslash( (array) ( $_POST['calp'] ?? array() ) );
-		if ( ! empty( $_POST['calp_website'] ) || 2 !== count( $token ) || ! hash_equals( self::sign( $token[0] ), $token[1] ) || time() - (int) $token[0] < 5 ) {
+		if ( Plugin::is_bot() || 2 !== count( $token ) || ! hash_equals( self::sign( $token[0] ), $token[1] ) || time() - (int) $token[0] < 5 ) {
 			$done( 'calp_sent', 'contact' );
 		}
 		// phpcs:enable

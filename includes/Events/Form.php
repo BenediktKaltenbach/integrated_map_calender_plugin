@@ -40,7 +40,7 @@ final class Form {
 			<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( remove_query_arg( array( 'calp_sent', 'calp_error' ) ) ); ?>#calp-event-form">
 				<input type="hidden" name="calp_form" value="event">
 				<input type="hidden" name="calp_t" value="<?php echo esc_attr( $time . '.' . self::sign( $time ) ); ?>">
-				<p class="calp-hp" aria-hidden="true"><label>Website <input type="text" name="calp_website" tabindex="-1" autocomplete="off"></label></p>
+				<?php echo Plugin::form_fields(); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside. ?>
 				<p><label><?php esc_html_e( 'Title', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[title]" required maxlength="120"></label></p>
 				<p><label><?php esc_html_e( 'Category', 'calendar-plugin' ); ?><br><select name="calp[category]">
 					<?php foreach ( Settings::event_categories() as $slug => $c ) : ?>
@@ -86,7 +86,7 @@ final class Form {
 		if ( 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) || 'event' !== ( $_POST['calp_form'] ?? '' ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return;
 		}
-		$back = remove_query_arg( array( 'calp_sent', 'calp_error' ), wp_get_referer() ?: home_url( '/' ) );
+		$back = Plugin::back_url();
 		$fail = static function ( string $msg ) use ( $back ) {
 			wp_safe_redirect( add_query_arg( 'calp_error', rawurlencode( $msg ), $back ) . '#calp-event-form' );
 			exit;
@@ -95,7 +95,7 @@ final class Form {
 		// phpcs:disable WordPress.Security.NonceVerification -- public form, protected by time token and honeypot.
 		$token = explode( '.', (string) ( $_POST['calp_t'] ?? '' ) );
 		$in    = wp_unslash( (array) ( $_POST['calp'] ?? array() ) );
-		$bot   = ! empty( $_POST['calp_website'] ) || 2 !== count( $token ) || ! hash_equals( self::sign( $token[0] ), $token[1] )
+		$bot   = Plugin::is_bot() || 2 !== count( $token ) || ! hash_equals( self::sign( $token[0] ), $token[1] )
 			|| time() - (int) $token[0] < self::MIN_SECONDS;
 		// phpcs:enable
 		if ( $bot ) {

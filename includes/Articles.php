@@ -125,7 +125,7 @@ final class Articles {
 			<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( remove_query_arg( array( 'calp_sent', 'calp_error' ) ) ); ?>#calp-article-form">
 				<input type="hidden" name="calp_form" value="article">
 				<input type="hidden" name="calp_t" value="<?php echo esc_attr( $time . '.' . self::sign( $time ) ); ?>">
-				<p class="calp-hp" aria-hidden="true"><label>Website <input type="text" name="calp_website" tabindex="-1" autocomplete="off"></label></p>
+				<?php echo Plugin::form_fields(); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside. ?>
 				<div class="calp-form__row">
 					<p><label><?php esc_html_e( 'Your name', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[name]" required maxlength="80"></label></p>
 					<p><label><?php esc_html_e( 'Your e-mail', 'calendar-plugin' ); ?> *<br><input type="email" name="calp[email]" required></label></p>
@@ -155,7 +155,7 @@ final class Articles {
 		if ( 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) || 'article' !== ( $_POST['calp_form'] ?? '' ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return;
 		}
-		$back = remove_query_arg( array( 'calp_sent', 'calp_error' ), wp_get_referer() ?: home_url( '/' ) );
+		$back = Plugin::back_url();
 		$fail = static function ( string $msg ) use ( $back ) {
 			wp_safe_redirect( add_query_arg( 'calp_error', rawurlencode( $msg ), $back ) . '#calp-article-form' );
 			exit;
@@ -163,7 +163,7 @@ final class Articles {
 		// phpcs:disable WordPress.Security.NonceVerification -- public form, protected by time token and honeypot.
 		$token = explode( '.', (string) ( $_POST['calp_t'] ?? '' ) );
 		$in    = wp_unslash( (array) ( $_POST['calp'] ?? array() ) );
-		if ( ! empty( $_POST['calp_website'] ) || 2 !== count( $token ) || ! hash_equals( self::sign( $token[0] ), $token[1] ) || time() - (int) $token[0] < 5 ) {
+		if ( Plugin::is_bot() || 2 !== count( $token ) || ! hash_equals( self::sign( $token[0] ), $token[1] ) || time() - (int) $token[0] < 5 ) {
 			wp_safe_redirect( add_query_arg( 'calp_sent', 'article', $back ) . '#calp-article-form' );
 			exit;
 		}
