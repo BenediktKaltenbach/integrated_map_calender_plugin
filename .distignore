@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+.gitattributes
+.distignore
+tests
+composer.json
+composer.lock
+CLAUDE.md
+README.md

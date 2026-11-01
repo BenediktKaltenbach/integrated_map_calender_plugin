@@ -1,0 +1,28 @@
+Leaflet.js und Leaflet.markercluster müssen manuell heruntergeladen werden:
+
+── Leaflet ──────────────────────────────────────────────────────────
+1. https://leafletjs.com/download.html
+2. Leaflet 1.9.4 herunterladen und entpacken
+3. Diese Dateien in diesen Ordner (assets/leaflet/) kopieren:
+   - leaflet.js
+   - leaflet.css
+   - images/  (gesamter Ordner)
+
+── Leaflet.markercluster ────────────────────────────────────────────
+1. https://github.com/Leaflet/Leaflet.markercluster/releases
+2. Neueste Version herunterladen → "dist" Ordner öffnen
+3. Diese Dateien in denselben Ordner (assets/leaflet/) kopieren:
+   - leaflet.markercluster.js
+   - MarkerCluster.css
+   - MarkerCluster.Default.css
+
+── Ergebnis ─────────────────────────────────────────────────────────
+assets/leaflet/
+├── leaflet.js
+├── leaflet.css
+├── leaflet.markercluster.js
+├── MarkerCluster.css
+├── MarkerCluster.Default.css
+└── images/
+    ├── marker-icon.png
+    └── ...

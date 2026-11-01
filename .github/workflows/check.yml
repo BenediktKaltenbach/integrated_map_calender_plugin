@@ -1,0 +1,32 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+      - name: PHP syntax
+        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+      - name: JavaScript syntax
+        run: |
+          for f in assets/*.js; do node --check "$f"; done
+          if grep -nE '\(\?<[=!]' assets/*.js; then
+            echo "::error::Regex lookbehind found – breaks the whole script in Safari before 16.4."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist
+      - name: Tests
+        run: php tests/run.php

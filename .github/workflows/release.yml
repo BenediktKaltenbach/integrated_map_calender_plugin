@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+      - name: Tag matches version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          grep -q "Version:           $v" calendar-plugin.php || { echo "::error::Plugin header version differs from tag $v"; exit 1; }
+          grep -q "const VERSION = '$v';" calendar-plugin.php || { echo "::error::VERSION constant differs from tag $v"; exit 1; }
+      - name: Build ZIP
+        run: |
+          composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          mkdir -p build/calendar-plugin
+          rsync -a --exclude-from=.distignore ./ build/calendar-plugin/ --exclude build
+          (cd build && zip -qr ../calendar-plugin.zip calendar-plugin)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: calendar-plugin.zip

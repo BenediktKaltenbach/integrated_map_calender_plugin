@@ -1,0 +1,369 @@
+<?php
+/**
+ * Settings page (Settings › Calendar Plugin) with one tab per area.
+ * Everything lives in one option array; each tab only saves its own keys.
+ */
+
+namespace CalendarPlugin;
+
+use CalendarPlugin\Events\Sync;
+
+final class Settings {
+
+	public const OPTION          = 'calp_settings';
+	public const OPTION_CRON_KEY = 'calp_cron_key';
+	private const PAGE           = 'calendar-plugin';
+
+	/** Review areas: key => label. */
+	public static function review_areas(): array {
+		return array(
+			'events'   => __( 'Event suggestions', 'calendar-plugin' ),
+			'places'   => __( 'Place suggestions (map)', 'calendar-plugin' ),
+			'articles' => __( 'Article submissions', 'calendar-plugin' ),
+		);
+	}
+
+	public static function defaults(): array {
+		return array(
+			'event_categories' => array(
+				array(
+					'slug'   => 'eurocup',
+					'name'   => 'Eurocup',
+					'color'  => '#31525B',
+					'ical'   => '',
+					'on_map' => 1,
+				),
+				array(
+					'slug'   => 'championship',
+					'name'   => 'Championship',
+					'color'  => '#E08A00',
+					'ical'   => '',
+					'on_map' => 1,
+				),
+				array(
+					'slug'   => 'other',
+					'name'   => 'Other events',
+					'color'  => '#4C8C99',
+					'ical'   => '',
+					'on_map' => 1,
+				),
+			),
+			'event_form'       => 1,
+			'map_lat'          => 50.0,
+			'map_lng'          => 12.0,
+			'map_zoom'         => 4,
+			'map_height'       => 550,
+			'map_suggestions'  => 1,
+			'map_events'       => 1,
+			'reviewers'        => array(
+				'events'   => '',
+				'places'   => '',
+				'articles' => '',
+			),
+			'mail_from_name'   => '',
+			'article_categories' => array(
+				'history' => 'History',
+				'blog'    => 'Blog',
+				'news'    => 'News',
+			),
+			'seeking_rep_text' => 'We are looking for a representative! Can you be this person? Please contact us.',
+			'contact_email'    => '',
+		);
+	}
+
+	public static function get(): array {
+		$saved = get_option( self::OPTION, array() );
+		$s     = array_merge( self::defaults(), is_array( $saved ) ? $saved : array() );
+		$s['reviewers'] = array_merge( self::defaults()['reviewers'], (array) $s['reviewers'] );
+		return $s;
+	}
+
+	/** @return array<string, array{slug: string, name: string, color: string, ical: string, on_map: int}> keyed by slug */
+	public static function event_categories(): array {
+		$out = array();
+		foreach ( (array) self::get()['event_categories'] as $c ) {
+			if ( ! empty( $c['slug'] ) ) {
+				$out[ $c['slug'] ] = $c;
+			}
+		}
+		return $out;
+	}
+
+	/** Reviewer addresses for an area; falls back to the site admin address. */
+	public static function reviewers( string $area ): array {
+		$raw   = (string) ( self::get()['reviewers'][ $area ] ?? '' );
+		$mails = array_values( array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', $raw ) ), 'is_email' ) );
+		return $mails ? array_unique( $mails ) : array( (string) get_option( 'admin_email' ) );
+	}
+
+	public static function cron_url(): string {
+		return add_query_arg(
+			array(
+				'action' => 'calp_cron',
+				'key'    => (string) get_option( self::OPTION_CRON_KEY ),
+			),
+			admin_url( 'admin-post.php' )
+		);
+	}
+
+	// ── Admin ────────────────────────────────────────────────────────
+
+	public static function admin(): void {
+		add_action( 'admin_menu', array( self::class, 'menu' ) );
+		add_action( 'admin_init', array( self::class, 'register' ) );
+		add_action( 'admin_post_calp_sync_now', array( self::class, 'sync_now' ) );
+		add_action( 'admin_post_calp_import_iksa', array( self::class, 'import_iksa' ) );
+	}
+
+	public static function menu(): void {
+		add_options_page( 'Calendar Plugin', 'Calendar Plugin', 'manage_options', self::PAGE, array( self::class, 'page' ) );
+	}
+
+	public static function register(): void {
+		register_setting(
+			'calp',
+			self::OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( self::class, 'sanitize' ),
+				'default'           => array(),
+			)
+		);
+	}
+
+	private static function tabs(): array {
+		return array(
+			'events'   => __( 'Events', 'calendar-plugin' ),
+			'map'      => __( 'Map', 'calendar-plugin' ),
+			'review'   => __( 'Review', 'calendar-plugin' ),
+			'content'  => __( 'Countries & articles', 'calendar-plugin' ),
+			'help'     => __( 'Shortcodes & tools', 'calendar-plugin' ),
+		);
+	}
+
+	/** Merges the submitted tab into the stored settings. */
+	public static function sanitize( $input ): array {
+		$s   = self::get();
+		$in  = is_array( $input ) ? $input : array();
+		$tab = sanitize_key( $in['_tab'] ?? '' );
+
+		if ( 'events' === $tab ) {
+			$cats = array();
+			foreach ( (array) ( $in['event_categories'] ?? array() ) as $c ) {
+				$name = sanitize_text_field( $c['name'] ?? '' );
+				$slug = sanitize_key( ( $c['slug'] ?? '' ) ?: $name );
+				if ( '' === $name || '' === $slug || isset( $cats[ $slug ] ) ) {
+					continue;
+				}
+				$ical          = trim( (string) ( $c['ical'] ?? '' ) );
+				$cats[ $slug ] = array(
+					'slug'   => $slug,
+					'name'   => $name,
+					'color'  => sanitize_hex_color( $c['color'] ?? '' ) ?: '#31525B',
+					// The secret iCal address is a URL; keep it exactly (esc_url_raw would strip nothing relevant).
+					'ical'   => preg_match( '#^(https?|webcal)://#i', $ical ) ? preg_replace( '#^webcal://#i', 'https://', esc_url_raw( $ical, array( 'http', 'https', 'webcal' ) ) ) : '',
+					'on_map' => empty( $c['on_map'] ) ? 0 : 1,
+				);
+			}
+			$s['event_categories'] = array_values( $cats );
+			$s['event_form']       = empty( $in['event_form'] ) ? 0 : 1;
+		}
+
+		if ( 'map' === $tab ) {
+			$s['map_lat']         = max( -90, min( 90, (float) ( $in['map_lat'] ?? 50 ) ) );
+			$s['map_lng']         = max( -180, min( 180, (float) ( $in['map_lng'] ?? 12 ) ) );
+			$s['map_zoom']        = max( 1, min( 18, (int) ( $in['map_zoom'] ?? 4 ) ) );
+			$s['map_height']      = max( 250, min( 1200, (int) ( $in['map_height'] ?? 550 ) ) );
+			$s['map_suggestions'] = empty( $in['map_suggestions'] ) ? 0 : 1;
+			$s['map_events']      = empty( $in['map_events'] ) ? 0 : 1;
+		}
+
+		if ( 'review' === $tab ) {
+			foreach ( array_keys( self::review_areas() ) as $area ) {
+				$mails                     = array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', (string) ( $in['reviewers'][ $area ] ?? '' ) ) ), 'is_email' );
+				$s['reviewers'][ $area ] = implode( "\n", array_unique( $mails ) );
+			}
+			$s['mail_from_name'] = sanitize_text_field( $in['mail_from_name'] ?? '' );
+		}
+
+		if ( 'content' === $tab ) {
+			$cats = array();
+			foreach ( preg_split( '/\R/', (string) ( $in['article_categories'] ?? '' ) ) as $line ) {
+				$parts = array_map( 'trim', explode( '=', $line, 2 ) );
+				$name  = sanitize_text_field( $parts[1] ?? $parts[0] );
+				$slug  = sanitize_key( $parts[0] );
+				if ( '' !== $slug && '' !== $name ) {
+					$cats[ $slug ] = $name;
+				}
+			}
+			if ( $cats ) {
+				$s['article_categories'] = $cats;
+			}
+			$s['seeking_rep_text'] = sanitize_textarea_field( $in['seeking_rep_text'] ?? '' );
+			$s['contact_email']    = sanitize_email( $in['contact_email'] ?? '' );
+		}
+
+		return $s;
+	}
+
+	public static function page(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$tabs = self::tabs();
+		$tab  = sanitize_key( $_GET['tab'] ?? 'events' ); // phpcs:ignore WordPress.Security.NonceVerification
+		if ( ! isset( $tabs[ $tab ] ) ) {
+			$tab = 'events';
+		}
+		$s = self::get();
+
+		echo '<div class="wrap"><h1>Calendar Plugin</h1><nav class="nav-tab-wrapper">';
+		foreach ( $tabs as $key => $label ) {
+			printf(
+				'<a href="%s" class="nav-tab%s">%s</a>',
+				esc_url( admin_url( 'options-general.php?page=' . self::PAGE . '&tab=' . $key ) ),
+				$key === $tab ? ' nav-tab-active' : '',
+				esc_html( $label )
+			);
+		}
+		echo '</nav>';
+
+		if ( isset( $_GET['calp_msg'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sanitize_text_field( wp_unslash( $_GET['calp_msg'] ) ) ) . '</p></div>'; // phpcs:ignore WordPress.Security.NonceVerification
+		}
+
+		if ( 'help' === $tab ) {
+			self::page_help();
+			echo '</div>';
+			return;
+		}
+
+		echo '<form method="post" action="options.php">';
+		settings_fields( 'calp' );
+		printf( '<input type="hidden" name="%s[_tab]" value="%s">', esc_attr( self::OPTION ), esc_attr( $tab ) );
+		$n = static fn( string $key ) => esc_attr( self::OPTION . '[' . $key . ']' );
+
+		if ( 'events' === $tab ) {
+			echo '<h2>' . esc_html__( 'Event categories', 'calendar-plugin' ) . '</h2>';
+			echo '<p>' . esc_html__( 'Each category can have its own Google Calendar (secret address in iCal format, from the calendar settings › "Integrate calendar"). Categories without an address only hold events entered here on the website or accepted suggestions. Leave the name empty to remove a row.', 'calendar-plugin' ) . '</p>';
+			echo '<table class="widefat striped calp-cats"><thead><tr><th>' . esc_html__( 'Name', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'Slug', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'Colour', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'Google Calendar (iCal address)', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'On map', 'calendar-plugin' ) . '</th></tr></thead><tbody>';
+			$rows   = array_values( (array) $s['event_categories'] );
+			$rows[] = array( 'slug' => '', 'name' => '', 'color' => '#31525B', 'ical' => '', 'on_map' => 1 );
+			$status = (array) get_option( Sync::OPTION_STATUS, array() );
+			foreach ( $rows as $i => $c ) {
+				$base = self::OPTION . '[event_categories][' . $i . ']';
+				$info = '';
+				if ( ! empty( $c['slug'] ) && isset( $status[ $c['slug'] ] ) ) {
+					$st   = $status[ $c['slug'] ];
+					$info = '<br><small>' . ( ! empty( $st['ok'] )
+						? esc_html( sprintf( /* translators: 1: calendar name, 2: number of events */ __( '✅ "%1$s", %2$d events', 'calendar-plugin' ), $st['name'] ?? '', $st['count'] ?? 0 ) )
+						: '⚠ ' . esc_html( $st['message'] ?? '' ) ) . '</small>';
+				}
+				printf(
+					'<tr><td><input type="text" name="%1$s[name]" value="%2$s"></td><td><input type="text" name="%1$s[slug]" value="%3$s" size="12"></td><td><input type="color" name="%1$s[color]" value="%4$s"></td><td><input type="url" class="large-text" name="%1$s[ical]" value="%5$s" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">%7$s</td><td><input type="checkbox" name="%1$s[on_map]" value="1"%6$s></td></tr>',
+					esc_attr( $base ),
+					esc_attr( $c['name'] ),
+					esc_attr( $c['slug'] ),
+					esc_attr( $c['color'] ),
+					esc_attr( $c['ical'] ),
+					checked( ! empty( $c['on_map'] ), true, false ),
+					$info // phpcs:ignore WordPress.Security.EscapeOutput -- escaped above.
+				);
+			}
+			echo '</tbody></table>';
+			printf( '<p><label><input type="checkbox" name="%s" value="1"%s> %s</label></p>', $n( 'event_form' ), checked( ! empty( $s['event_form'] ), true, false ), esc_html__( 'Allow visitors to suggest events (form [calp_event_form])', 'calendar-plugin' ) );
+		}
+
+		if ( 'map' === $tab ) {
+			echo '<table class="form-table">';
+			printf( '<tr><th>%s</th><td><input type="number" step="0.0001" name="%s" value="%s"> / <input type="number" step="0.0001" name="%s" value="%s"></td></tr>', esc_html__( 'Map centre (lat / lng)', 'calendar-plugin' ), $n( 'map_lat' ), esc_attr( $s['map_lat'] ), $n( 'map_lng' ), esc_attr( $s['map_lng'] ) );
+			printf( '<tr><th>%s</th><td><input type="number" min="1" max="18" name="%s" value="%s"></td></tr>', esc_html__( 'Default zoom', 'calendar-plugin' ), $n( 'map_zoom' ), esc_attr( $s['map_zoom'] ) );
+			printf( '<tr><th>%s</th><td><input type="number" min="250" max="1200" name="%s" value="%s"> px</td></tr>', esc_html__( 'Map height', 'calendar-plugin' ), $n( 'map_height' ), esc_attr( $s['map_height'] ) );
+			printf( '<tr><th>%s</th><td><label><input type="checkbox" name="%s" value="1"%s> %s</label></td></tr>', esc_html__( 'Suggestions', 'calendar-plugin' ), $n( 'map_suggestions' ), checked( ! empty( $s['map_suggestions'] ), true, false ), esc_html__( 'Visitors can suggest places on the map', 'calendar-plugin' ) );
+			printf( '<tr><th>%s</th><td><label><input type="checkbox" name="%s" value="1"%s> %s</label></td></tr>', esc_html__( 'Events', 'calendar-plugin' ), $n( 'map_events' ), checked( ! empty( $s['map_events'] ), true, false ), esc_html__( 'Show upcoming events on the map', 'calendar-plugin' ) );
+			echo '</table>';
+			echo '<p>' . esc_html__( 'Places and their categories are managed under Map places in the admin menu.', 'calendar-plugin' ) . '</p>';
+		}
+
+		if ( 'review' === $tab ) {
+			echo '<p>' . esc_html__( 'Every submission is mailed to all reviewers of its area. The mail has links to approve, reject or edit – they work without logging in and open a confirmation page first, so mail scanners cannot trigger them. Once someone decides, the others are informed. One address per line; empty = the site admin address.', 'calendar-plugin' ) . '</p><table class="form-table">';
+			foreach ( self::review_areas() as $area => $label ) {
+				printf(
+					'<tr><th>%s</th><td><textarea rows="4" cols="50" name="%s">%s</textarea></td></tr>',
+					esc_html( $label ),
+					esc_attr( self::OPTION . '[reviewers][' . $area . ']' ),
+					esc_textarea( (string) $s['reviewers'][ $area ] )
+				);
+			}
+			printf( '<tr><th>%s</th><td><input type="text" class="regular-text" name="%s" value="%s" placeholder="%s"></td></tr>', esc_html__( 'Sender name in mails', 'calendar-plugin' ), $n( 'mail_from_name' ), esc_attr( $s['mail_from_name'] ), esc_attr( get_bloginfo( 'name' ) ) );
+			echo '</table>';
+		}
+
+		if ( 'content' === $tab ) {
+			$lines = array();
+			foreach ( (array) $s['article_categories'] as $slug => $name ) {
+				$lines[] = $slug . ' = ' . $name;
+			}
+			echo '<table class="form-table">';
+			printf( '<tr><th>%s</th><td><textarea rows="4" cols="40" name="%s">%s</textarea><p class="description">%s</p></td></tr>', esc_html__( 'Article categories', 'calendar-plugin' ), $n( 'article_categories' ), esc_textarea( implode( "\n", $lines ) ), esc_html__( 'One per line: slug = name', 'calendar-plugin' ) );
+			printf( '<tr><th>%s</th><td><input type="email" class="regular-text" name="%s" value="%s"><p class="description">%s</p></td></tr>', esc_html__( 'Public contact address', 'calendar-plugin' ), $n( 'contact_email' ), esc_attr( $s['contact_email'] ), esc_html__( 'Shown for countries without a representative.', 'calendar-plugin' ) );
+			printf( '<tr><th>%s</th><td><textarea rows="3" cols="60" name="%s">%s</textarea></td></tr>', esc_html__( 'Text for countries without a representative', 'calendar-plugin' ), $n( 'seeking_rep_text' ), esc_textarea( $s['seeking_rep_text'] ) );
+			echo '</table>';
+		}
+
+		submit_button();
+		echo '</form></div>';
+	}
+
+	private static function page_help(): void {
+		$last = (int) get_option( Sync::OPTION_LAST, 0 );
+		echo '<h2>' . esc_html__( 'Calendar sync', 'calendar-plugin' ) . '</h2><p>';
+		echo esc_html( $last ? sprintf( /* translators: %s: date and time */ __( 'Last sync: %s', 'calendar-plugin' ), wp_date( 'j F Y, H:i', $last ) ) : __( 'Not synced yet.', 'calendar-plugin' ) );
+		echo '</p><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="calp_sync_now">';
+		wp_nonce_field( 'calp_sync_now' );
+		submit_button( __( 'Sync now', 'calendar-plugin' ), 'secondary', 'submit', false );
+		echo '</form><p>' . esc_html__( 'For reliable hourly syncing let your host call this address (e.g. All-Inkl: KAS › Tools › Cronjobs). WP-Cron is only a fallback.', 'calendar-plugin' ) . '</p>';
+		echo '<p><code>' . esc_html( self::cron_url() ) . '</code></p>';
+
+		echo '<h2>' . esc_html__( 'Shortcodes', 'calendar-plugin' ) . '</h2><table class="widefat striped"><tbody>';
+		$codes = array(
+			'[calp_explorer tabs="map,calendar" default="map"]'      => __( 'Map and calendar with tabs to switch between them.', 'calendar-plugin' ),
+			'[calp_map]'                                              => __( 'The map alone (places, events, suggestion form).', 'calendar-plugin' ),
+			'[calp_events category="eurocup" count="10" months="12"]' => __( 'Event list. All attributes optional; past="1" includes past events.', 'calendar-plugin' ),
+			'[calp_event_form]'                                       => __( 'Public form to suggest an event.', 'calendar-plugin' ),
+			'[calp_countries contacts="1"]'                           => __( 'Member countries as round flags, optionally with contact details.', 'calendar-plugin' ),
+			'[calp_articles category="news" count="6"]'               => __( 'Article cards.', 'calendar-plugin' ),
+			'[calp_article_form]'                                     => __( 'Public form to send in an article.', 'calendar-plugin' ),
+		);
+		foreach ( $codes as $code => $text ) {
+			printf( '<tr><td><code>%s</code></td><td>%s</td></tr>', esc_html( $code ), esc_html( $text ) );
+		}
+		echo '</tbody></table>';
+
+		echo '<h2>' . esc_html__( 'Import from IKSA Site Kit', 'calendar-plugin' ) . '</h2><p>' . esc_html__( 'Copies countries (with flags and contacts) and articles from the old "IKSA Site Kit" plugin. Existing entries with the same title are skipped, so it is safe to run twice.', 'calendar-plugin' ) . '</p>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="calp_import_iksa">';
+		wp_nonce_field( 'calp_import_iksa' );
+		submit_button( __( 'Import now', 'calendar-plugin' ), 'secondary', 'submit', false );
+		echo '</form>';
+	}
+
+	public static function sync_now(): void {
+		check_admin_referer( 'calp_sync_now' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '', 403 );
+		}
+		Sync::all();
+		wp_safe_redirect( admin_url( 'options-general.php?page=' . self::PAGE . '&tab=help&calp_msg=' . rawurlencode( __( 'Sync finished.', 'calendar-plugin' ) ) ) );
+		exit;
+	}
+
+	public static function import_iksa(): void {
+		check_admin_referer( 'calp_import_iksa' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '', 403 );
+		}
+		$msg = Countries::import_from_site_kit() . ' ' . Articles::import_from_site_kit();
+		wp_safe_redirect( admin_url( 'options-general.php?page=' . self::PAGE . '&tab=help&calp_msg=' . rawurlencode( $msg ) ) );
+		exit;
+	}
+}
