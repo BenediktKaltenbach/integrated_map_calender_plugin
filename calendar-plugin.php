@@ -9,7 +9,7 @@
  * License:           GPL-2.0-or-later
  * Text Domain:       calendar-plugin
  * Domain Path:       /languages
- * Update URI:        https://github.com/BenediktKaltenbach/calendar-plugin
+ * Update URI:        https://github.com/BenediktKaltenbach/integrated_map_calender_plugin
  *
  * Merges and generalises "DTRV-Termine" (plugin_calenders) and "My Map Plugin" (map_plugin).
  */
@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
 
 const VERSION = '0.1.0';
 const FILE    = __FILE__;
-const REPO    = 'https://github.com/BenediktKaltenbach/calendar-plugin/';
+const REPO    = 'https://github.com/BenediktKaltenbach/integrated_map_calender_plugin/';
 
 $autoload = __DIR__ . '/vendor/autoload.php';
 if ( ! is_readable( $autoload ) ) {
