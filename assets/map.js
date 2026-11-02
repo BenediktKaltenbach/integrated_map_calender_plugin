@@ -138,7 +138,7 @@ function initMap(wrap) {
           var list = categories.filter(function (c) { return c.group === g; });
           if (!list.length) return;
           html += '<h4>' + escHtml(groups[g]) + '</h4>' + list.map(function (c) {
-            return '<label class="calp-legend__item is-on" data-cat="' + escHtml(c.id) + '"><span class="calp-legend__box" style="--c:' + escHtml(c.color) + '"></span>' + escHtml(c.name) + '</label>';
+            return '<label class="calp-legend__item' + (active[c.id] ? ' is-on' : '') + '" data-cat="' + escHtml(c.id) + '"><span class="calp-legend__box" style="--c:' + escHtml(c.color) + '"></span>' + escHtml(c.name) + '</label>';
           }).join('');
         });
         div.innerHTML = html;
@@ -148,13 +148,42 @@ function initMap(wrap) {
             active[id] = !active[id];
             item.classList.toggle('is-on', active[id]);
             render();
+            if (id.indexOf('event-') === 0) {
+              document.dispatchEvent(new CustomEvent('calp:filter', { detail: { cats: activeEvents(), source: wrap } }));
+            }
           });
         });
+        legendEl = div;
         return div;
       },
     });
     new Legend({ position: 'bottomright' }).addTo(map);
   }
+
+  // ── Event categories in step with the list filter (assets/filter.js) ──
+  var legendEl = null;
+  var eventCats = function () { return categories.filter(function (c) { return c.group === 'events'; }); };
+
+  // Slugs of the shown event categories, or null when all are shown.
+  function activeEvents() {
+    var list = eventCats();
+    var on = list.filter(function (c) { return active[c.id]; });
+    return on.length === list.length ? null : on.map(function (c) { return c.id.slice(6); });
+  }
+
+  function showEvents(cats) {
+    eventCats().forEach(function (c) {
+      active[c.id] = !cats || cats.indexOf(c.id.slice(6)) !== -1;
+      var item = legendEl && legendEl.querySelector('[data-cat="' + c.id + '"]');
+      if (item) item.classList.toggle('is-on', active[c.id]);
+    });
+  }
+
+  document.addEventListener('calp:filter', function (e) {
+    if (!e.detail || e.detail.source === wrap) return;
+    showEvents(e.detail.cats);
+    if (categories.length) render();
+  });
 
   fetch(cfg.rest + 'map')
     .then(function (r) { return r.json(); })
@@ -162,6 +191,9 @@ function initMap(wrap) {
       categories = data.categories || [];
       markers = data.markers || [];
       categories.forEach(function (c) { active[c.id] = true; });
+      // A filtered link (?calp_cat=eurocup) opens the map filtered too.
+      var wanted = window.URLSearchParams ? new URLSearchParams(location.search).get('calp_cat') : null;
+      if (wanted) showEvents([wanted]);
       render();
       legend();
     })

@@ -84,6 +84,7 @@
 .calp-filter__btn:hover { background: var(--calp-cream); }
 .calp-filter__btn.is-active { background: var(--calp-cat, var(--calp-dark)); color: #fff !important; }
 .calp-filter__btn.is-active::before { background: #fff; }
+.calp-events [hidden], .calp-empty[hidden] { display: none !important; }
 
 /* ── Explorer tabs ───────────────────────────────────────────────── */
 .calp-tabs { display: flex; gap: .3em; border-bottom: 4px solid var(--calp-accent); margin-bottom: 1.2em; }

@@ -86,58 +86,67 @@ final class Renderer {
 
 	public static function list( array $args ): string {
 		$buttons = '';
+		$active  = '';
 		if ( ! empty( $args['filter'] ) ) {
-			[ $args, $buttons ] = self::filter( $args );
+			[ $active, $buttons ] = self::filter( $args );
 		}
 		$ids = self::query( $args );
 		if ( ! $ids ) {
-			return $buttons . '<p class="calp-empty">' . esc_html( ! empty( $args['filtered'] ) ? __( 'There are no upcoming events in this category at the moment.', 'calendar-plugin' ) : __( 'There are no upcoming events at the moment.', 'calendar-plugin' ) ) . '</p>';
+			return $buttons . '<p class="calp-empty">' . esc_html__( 'There are no upcoming events at the moment.', 'calendar-plugin' ) . '</p>';
 		}
-		$tz    = Format::tz();
-		$month = '';
-		$html  = $buttons . '<div class="calp-events">';
+
+		// All categories are in the page and the filtered-out ones hidden, so assets/filter.js can
+		// switch without reloading and keep the map in step. Without JavaScript the links reload.
+		$tz     = Format::tz();
+		$months = array();
 		foreach ( $ids as $id ) {
-			$d = Events::data( $id );
-			$m = wp_date( 'F Y', $d['start'], $tz );
-			if ( $m !== $month ) {
-				$html .= ( '' !== $month ? '</ul>' : '' ) . '<h3 class="calp-events__month"><span>' . esc_html( $m ) . '</span></h3><ul class="calp-events__list">';
-				$month = $m;
-			}
-			$html .= self::item( $id, $d );
+			$d    = Events::data( $id );
+			$show = '' === $active || $d['category'] === $active;
+			$m    = wp_date( 'F Y', $d['start'], $tz );
+
+			$months[ $m ]['items'] = ( $months[ $m ]['items'] ?? '' ) . self::item( $id, $d, $show );
+			$months[ $m ]['shown'] = ! empty( $months[ $m ]['shown'] ) || $show;
 		}
-		return $html . '</ul></div>';
+		$html = $buttons . '<div class="calp-events">';
+		foreach ( $months as $m => $group ) {
+			$html .= '<div class="calp-events__group"' . ( $group['shown'] ? '' : ' hidden' ) . '><h3 class="calp-events__month"><span>' . esc_html( $m ) . '</span></h3><ul class="calp-events__list">' . $group['items'] . '</ul></div>';
+		}
+		$html .= '</div>';
+		if ( $buttons ) {
+			$none  = ! in_array( true, array_column( $months, 'shown' ), true );
+			$html .= '<p class="calp-empty calp-empty--filtered"' . ( $none ? '' : ' hidden' ) . '>' . esc_html__( 'There are no upcoming events in this category at the moment.', 'calendar-plugin' ) . '</p>';
+		}
+		return $html;
 	}
 
 	/**
 	 * Category buttons above the list. The choice is in the address (?calp_cat=eurocup), so links
 	 * from other pages can open the list already filtered, and it works without JavaScript.
 	 *
-	 * @return array{0: array, 1: string} narrowed query args, HTML of the buttons
+	 * @return array{0: string, 1: string} active category ('' = all), HTML of the buttons
 	 */
 	private static function filter( array $args ): array {
 		$all     = Settings::event_categories();
 		$allowed = ! empty( $args['categories'] ) ? array_values( array_intersect( $args['categories'], array_keys( $all ) ) ) : array_keys( $all );
 		if ( count( $allowed ) < 2 ) {
-			return array( $args, '' );
+			return array( '', '' );
 		}
 		$active = sanitize_key( wp_unslash( $_GET['calp_cat'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification -- read-only filter.
-		if ( in_array( $active, $allowed, true ) ) {
-			$args['categories'] = array( $active );
-			$args['filtered']   = true;
-		} else {
+		if ( ! in_array( $active, $allowed, true ) ) {
 			$active = '';
 		}
+		wp_enqueue_script( 'calp-filter' );
 		$link = static fn( string $cat ) => esc_url( ( '' === $cat ? remove_query_arg( 'calp_cat' ) : add_query_arg( 'calp_cat', $cat ) ) . '#calendar' );
 		$html = '<nav class="calp-filter" aria-label="' . esc_attr__( 'Filter by category', 'calendar-plugin' ) . '">';
-		$html .= '<a class="calp-filter__btn' . ( '' === $active ? ' is-active' : '' ) . '" href="' . $link( '' ) . '"' . ( '' === $active ? ' aria-current="true"' : '' ) . '>' . esc_html__( 'All', 'calendar-plugin' ) . '</a>';
+		$html .= '<a class="calp-filter__btn' . ( '' === $active ? ' is-active' : '' ) . '" data-cat="" href="' . $link( '' ) . '"' . ( '' === $active ? ' aria-current="true"' : '' ) . '>' . esc_html__( 'All', 'calendar-plugin' ) . '</a>';
 		foreach ( $allowed as $slug ) {
 			$on    = $slug === $active;
-			$html .= '<a class="calp-filter__btn' . ( $on ? ' is-active' : '' ) . '" style="--calp-cat:' . esc_attr( $all[ $slug ]['color'] ) . '" href="' . $link( $slug ) . '"' . ( $on ? ' aria-current="true"' : '' ) . '>' . esc_html( $all[ $slug ]['name'] ) . '</a>';
+			$html .= '<a class="calp-filter__btn' . ( $on ? ' is-active' : '' ) . '" data-cat="' . esc_attr( $slug ) . '" style="--calp-cat:' . esc_attr( $all[ $slug ]['color'] ) . '" href="' . $link( $slug ) . '"' . ( $on ? ' aria-current="true"' : '' ) . '>' . esc_html( $all[ $slug ]['name'] ) . '</a>';
 		}
-		return array( $args, $html . '</nav>' );
+		return array( $active, $html . '</nav>' );
 	}
 
-	private static function item( int $id, array $d ): string {
+	private static function item( int $id, array $d, bool $show = true ): string {
 		$tz      = Format::tz();
 		$f       = $d['fields'];
 		$status  = $d['status'];
@@ -186,7 +195,7 @@ final class Renderer {
 		$more = '' !== $text ? '<details class="calp-event__more"><summary>' . esc_html__( 'Details', 'calendar-plugin' ) . '</summary>' . wp_kses_post( wpautop( make_clickable( esc_html( $text ) ) ) ) . '</details>' : '';
 
 		return sprintf(
-			'<li class="calp-event%1$s" style="--calp-cat:%2$s"><div class="calp-event__date"><span class="calp-event__day">%3$s</span><span class="calp-event__mon">%4$s</span></div><div class="calp-event__body"><h4 class="calp-event__title">%5$s%6$s</h4><p class="calp-event__meta">%7$s</p>%8$s</div><div class="calp-event__actions">%9$s</div></li>',
+			'<li class="calp-event%1$s" style="--calp-cat:%2$s" data-cat="%10$s"%11$s><div class="calp-event__date"><span class="calp-event__day">%3$s</span><span class="calp-event__mon">%4$s</span></div><div class="calp-event__body"><h4 class="calp-event__title">%5$s%6$s</h4><p class="calp-event__meta">%7$s</p>%8$s</div><div class="calp-event__actions">%9$s</div></li>',
 			$status ? ' is-' . esc_attr( $status ) : '',
 			esc_attr( Events::category_color( $d['category'] ) ),
 			esc_html( $day ),
@@ -195,7 +204,9 @@ final class Renderer {
 			'' !== Pages::page_url( $id ) ? '<a href="' . esc_url( Pages::page_url( $id ) ) . '">' . esc_html( get_the_title( $id ) ) . '</a>' : esc_html( get_the_title( $id ) ),
 			implode( ' · ', $meta ),
 			$more,
-			$buttons
+			$buttons,
+			esc_attr( $d['category'] ),
+			$show ? '' : ' hidden'
 		);
 	}
 
