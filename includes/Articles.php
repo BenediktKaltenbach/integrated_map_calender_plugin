@@ -60,9 +60,30 @@ final class Articles {
 					__( 'Category', 'calendar-plugin' ) => is_array( $terms ) && $terms ? implode( ', ', $terms ) : '–',
 					__( 'Summary', 'calendar-plugin' )  => (string) get_post_field( 'post_excerpt', $id ) ?: '–',
 					__( 'Image', 'calendar-plugin' )    => has_post_thumbnail( $id ) ? (string) get_the_post_thumbnail_url( $id, 'large' ) : '–',
+					__( 'Author shown', 'calendar-plugin' ) => self::byline( $id ) ?: __( '– (the sender does not want to be named)', 'calendar-plugin' ),
 				);
 			}
 		);
+		add_filter( 'the_content', array( self::class, 'with_byline' ) );
+	}
+
+	/** Name shown as author of an article ('' = not shown). Taken from the form unless the sender opted out; editable in the admin. */
+	public static function byline( int $id ): string {
+		return (string) get_post_meta( $id, '_calp_byline', true );
+	}
+
+	/** "By …" above the text of a single article. */
+	public static function with_byline( string $content ): string {
+		if ( ! is_singular( self::TYPE ) || ! in_the_loop() || ! is_main_query() ) {
+			return $content;
+		}
+		$name = self::byline( (int) get_the_ID() );
+		if ( '' === $name ) {
+			return $content;
+		}
+		wp_enqueue_style( 'calp' );
+		/* translators: %s: author name */
+		return '<p class="calp-byline">' . esc_html( sprintf( __( 'By %s', 'calendar-plugin' ), $name ) ) . '</p>' . $content;
 	}
 
 	/** [calp_articles category="news" count="6"] */
@@ -101,7 +122,9 @@ final class Articles {
 				$html .= get_the_post_thumbnail( $p, 'medium_large', array( 'class' => 'calp-card__img' ) );
 			}
 			$html .= '<h3 class="calp-card__title">' . esc_html( get_the_title( $p ) ) . '</h3></a>';
-			$html .= '<p class="calp-card__date">' . esc_html( get_the_date( '', $p ) ) . '</p>';
+			$name  = self::byline( $p->ID );
+			/* translators: %s: author name */
+			$html .= '<p class="calp-card__date">' . esc_html( get_the_date( '', $p ) . ( '' !== $name ? ' · ' . sprintf( __( 'by %s', 'calendar-plugin' ), $name ) : '' ) ) . '</p>';
 			$html .= '<p class="calp-card__text">' . esc_html( wp_trim_words( $p->post_excerpt ?: wp_strip_all_tags( $p->post_content ), 28 ) ) . '</p>';
 			$html .= '<a class="calp-card__more" href="' . esc_url( get_permalink( $p ) ) . '">' . esc_html__( 'Read more', 'calendar-plugin' ) . ' »</a></article>';
 		}
@@ -139,6 +162,7 @@ final class Articles {
 				<p><label><?php esc_html_e( 'Summary', 'calendar-plugin' ); ?><br><textarea name="calp[summary]" rows="2" maxlength="400"></textarea></label></p>
 				<p><label><?php esc_html_e( 'Text', 'calendar-plugin' ); ?> *<br><textarea name="calp[content]" rows="10" required maxlength="20000"></textarea></label></p>
 				<p><label><?php esc_html_e( 'Picture (JPG, PNG or WebP, max. 8 MB)', 'calendar-plugin' ); ?><br><input type="file" name="calp_image" accept="image/jpeg,image/png,image/webp"></label></p>
+				<p><label><input type="checkbox" name="calp[anonymous]" value="1"> <?php esc_html_e( 'Do not show my name with the article', 'calendar-plugin' ); ?></label></p>
 				<p><label><input type="checkbox" name="calp[consent]" value="1" required> <?php esc_html_e( 'I agree that my details are stored to process this article and that I have the rights to text and picture.', 'calendar-plugin' ); ?></label></p>
 				<p><button type="submit" class="calp-btn"><?php esc_html_e( 'Send for review', 'calendar-plugin' ); ?></button></p>
 			</form>
@@ -197,6 +221,9 @@ final class Articles {
 		}
 		update_post_meta( $id, '_calp_submitter_name', $name );
 		update_post_meta( $id, '_calp_submitter_email', $email );
+		if ( empty( $in['anonymous'] ) ) {
+			update_post_meta( $id, '_calp_byline', $name );
+		}
 
 		if ( ! empty( $_FILES['calp_image']['name'] ) && UPLOAD_ERR_OK === (int) $_FILES['calp_image']['error'] ) { // phpcs:ignore WordPress.Security.NonceVerification
 			$size = (int) $_FILES['calp_image']['size']; // phpcs:ignore WordPress.Security.NonceVerification
@@ -218,6 +245,13 @@ final class Articles {
 	}
 
 	public static function admin(): void {
+		add_action(
+			'add_meta_boxes_' . self::TYPE,
+			static function () {
+				add_meta_box( 'calp-byline', __( 'Author shown', 'calendar-plugin' ), array( self::class, 'byline_box' ), self::TYPE, 'side' );
+			}
+		);
+		add_action( 'save_post_' . self::TYPE, array( self::class, 'save_byline' ) );
 		add_filter(
 			'manage_' . self::TYPE . '_posts_columns',
 			static function ( array $cols ): array {
@@ -235,6 +269,27 @@ final class Articles {
 			10,
 			2
 		);
+	}
+
+	public static function byline_box( \WP_Post $post ): void {
+		wp_nonce_field( 'calp_byline', 'calp_byline_nonce' );
+		printf(
+			'<input type="text" class="widefat" name="calp_byline" value="%s"><p class="description">%s</p>',
+			esc_attr( self::byline( $post->ID ) ),
+			esc_html__( 'Shown as "By …" above the article and on its card. Empty = no name (e.g. when the sender did not want to be named).', 'calendar-plugin' )
+		);
+	}
+
+	public static function save_byline( int $id ): void {
+		if ( ! isset( $_POST['calp_byline_nonce'] ) || ! wp_verify_nonce( sanitize_key( $_POST['calp_byline_nonce'] ), 'calp_byline' ) || ! current_user_can( 'edit_post', $id ) ) {
+			return;
+		}
+		$name = sanitize_text_field( wp_unslash( $_POST['calp_byline'] ?? '' ) );
+		if ( '' === $name ) {
+			delete_post_meta( $id, '_calp_byline' );
+		} else {
+			update_post_meta( $id, '_calp_byline', $name );
+		}
 	}
 
 	/** Copies articles from the IKSA Site Kit (post type iksa_article, taxonomy iksa_article_category). */

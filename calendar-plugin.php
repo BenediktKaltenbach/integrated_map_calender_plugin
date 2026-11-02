@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Calendar Plugin
  * Description:       Events from Google Calendars and local entries, an interactive map, member countries, article submissions – all with review by mail to a configurable list of reviewers.
- * Version:           0.2.1
+ * Version:           0.2.2
  * Requires at least: 6.5
  * Requires PHP:      8.1
  * Author:            Benedikt Kaltenbach
@@ -18,7 +18,7 @@ namespace CalendarPlugin;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const FILE    = __FILE__;
 const REPO    = 'https://github.com/BenediktKaltenbach/integrated_map_calender_plugin/';
 
