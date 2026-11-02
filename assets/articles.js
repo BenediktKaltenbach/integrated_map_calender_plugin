@@ -20,9 +20,9 @@
       var open = box.classList.contains('is-open');
       var overflow = row.scrollWidth > row.clientWidth + 2;
       nav.hidden = !open && !overflow;
-      prev.hidden = next.hidden = open;
-      prev.disabled = row.scrollLeft <= 2;
-      next.disabled = row.scrollLeft + row.clientWidth >= row.scrollWidth - 2;
+      // At the start or end of the row the arrow on that side disappears.
+      prev.hidden = open || !overflow || row.scrollLeft <= 2;
+      next.hidden = open || !overflow || row.scrollLeft + row.clientWidth >= row.scrollWidth - 2;
     }
 
     prev.addEventListener('click', function () { row.scrollBy({ left: -step(), behavior: 'smooth' }); });

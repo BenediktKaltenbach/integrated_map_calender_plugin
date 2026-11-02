@@ -133,7 +133,7 @@ final class Articles {
 			$name  = self::byline( $p->ID );
 			/* translators: %s: author name */
 			$html .= '<p class="calp-card__date">' . esc_html( get_the_date( '', $p ) . ( '' !== $name ? ' · ' . sprintf( __( 'by %s', 'calendar-plugin' ), $name ) : '' ) ) . '</p>';
-			$html .= '<p class="calp-card__text">' . esc_html( wp_trim_words( $p->post_excerpt ?: wp_strip_all_tags( $p->post_content ), 28 ) ) . '</p>';
+			$html .= '<p class="calp-card__text">' . esc_html( wp_trim_words( $p->post_excerpt ?: wp_strip_all_tags( $p->post_content ), $slider ? 18 : 28 ) ) . '</p>';
 			$html .= '<a class="calp-card__more" href="' . esc_url( get_permalink( $p ) ) . '">' . esc_html__( 'Read more', 'calendar-plugin' ) . ' »</a></article>';
 		}
 		$html .= '</div>';
@@ -141,15 +141,20 @@ final class Articles {
 			return $html;
 		}
 		wp_enqueue_script( 'calp-articles' );
-		$nav = sprintf(
-			'<div class="calp-articles__nav" hidden><button type="button" class="calp-articles__prev" aria-label="%1$s">‹</button><button type="button" class="calp-articles__next" aria-label="%2$s">›</button><button type="button" class="calp-articles__all" aria-expanded="false" data-less="%3$s">%4$s</button></div>',
+		// Arrows sit on the left and right edge of the row; "Show all" below it.
+		$track = sprintf(
+			'<div class="calp-articles__track">%1$s<button type="button" class="calp-articles__arrow calp-articles__prev" aria-label="%2$s" hidden>‹</button><button type="button" class="calp-articles__arrow calp-articles__next" aria-label="%3$s" hidden>›</button></div>',
+			$html,
 			esc_attr__( 'Previous articles', 'calendar-plugin' ),
-			esc_attr__( 'Next articles', 'calendar-plugin' ),
+			esc_attr__( 'Next articles', 'calendar-plugin' )
+		);
+		$nav   = sprintf(
+			'<div class="calp-articles__nav" hidden><button type="button" class="calp-articles__all" aria-expanded="false" data-less="%1$s">%2$s</button></div>',
 			esc_attr__( 'Show less', 'calendar-plugin' ),
 			/* translators: %d: number of articles */
 			esc_html( sprintf( __( 'Show all (%d)', 'calendar-plugin' ), count( $posts ) ) )
 		);
-		return '<div class="calp-articles calp-articles--slider">' . $html . $nav . '</div>';
+		return '<div class="calp-articles calp-articles--slider">' . $track . $nav . '</div>';
 	}
 
 	/** [calp_article_form] */
