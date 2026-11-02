@@ -127,6 +127,8 @@
 .calp-card { background: var(--calp-light); border-radius: var(--calp-radius); overflow: hidden; padding-bottom: 1em; }
 .calp-card__link { text-decoration: none !important; color: inherit; }
 .calp-card__img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
+.calp-card__img--logo { display: flex; align-items: center; justify-content: center; background: var(--calp-cream); }
+.calp-card__img--logo img { width: 45%; height: auto; opacity: .85; }
 .calp-card__title, .calp-card__date, .calp-card__text, .calp-card__more { padding: 0 16px; }
 .calp-byline { font-weight: 600; color: var(--calp-muted); font-size: .9em; }
 .calp-card__title { font-size: 1.15em; margin: .7em 0 .2em; color: var(--calp-dark); }

@@ -125,6 +125,9 @@ final class Articles {
 			$html .= '<article class="calp-card"><a class="calp-card__link" href="' . esc_url( get_permalink( $p ) ) . '">';
 			if ( has_post_thumbnail( $p ) ) {
 				$html .= get_the_post_thumbnail( $p, 'medium_large', array( 'class' => 'calp-card__img' ) );
+			} elseif ( get_theme_mod( 'custom_logo' ) ) {
+				// Same height as a photo, so cards in a row line up; the site logo stands in.
+				$html .= '<div class="calp-card__img calp-card__img--logo">' . wp_get_attachment_image( (int) get_theme_mod( 'custom_logo' ), 'medium', false, array( 'alt' => '' ) ) . '</div>';
 			}
 			$html .= '<h3 class="calp-card__title">' . esc_html( get_the_title( $p ) ) . '</h3></a>';
 			$name  = self::byline( $p->ID );
