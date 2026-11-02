@@ -59,6 +59,7 @@ final class Plugin {
 		wp_register_style( 'calp', self::url( 'assets/hub.css' ), array(), VERSION );
 		wp_register_script( 'calp-explorer', self::url( 'assets/explorer.js' ), array(), VERSION, array( 'in_footer' => true ) );
 		wp_register_script( 'calp-filter', self::url( 'assets/filter.js' ), array(), VERSION, array( 'in_footer' => true ) );
+		wp_register_script( 'calp-articles', self::url( 'assets/articles.js' ), array(), VERSION, array( 'in_footer' => true ) );
 		wp_register_script( 'calp-event-form', self::url( 'assets/event-form.js' ), array(), VERSION, array( 'in_footer' => true ) );
 		wp_localize_script(
 			'calp-event-form',

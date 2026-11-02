@@ -86,17 +86,22 @@ final class Articles {
 		return '<p class="calp-byline">' . esc_html( sprintf( __( 'By %s', 'calendar-plugin' ), $name ) ) . '</p>' . $content;
 	}
 
-	/** [calp_articles category="news" count="6"] */
+	/**
+	 * [calp_articles category="news" count="6" layout="grid|slider"]
+	 * Slider: one row to scroll through, with arrows and a "Show all" button that opens the full grid in place.
+	 */
 	public static function shortcode_list( $atts = array() ): string {
 		$atts = shortcode_atts(
 			array(
 				'category' => '',
 				'count'    => 6,
+				'layout'   => 'grid',
 			),
 			$atts,
 			'calp_articles'
 		);
 		wp_enqueue_style( 'calp' );
+		$slider = 'slider' === $atts['layout'];
 		$args = array(
 			'post_type'      => self::TYPE,
 			'post_status'    => 'publish',
@@ -128,7 +133,20 @@ final class Articles {
 			$html .= '<p class="calp-card__text">' . esc_html( wp_trim_words( $p->post_excerpt ?: wp_strip_all_tags( $p->post_content ), 28 ) ) . '</p>';
 			$html .= '<a class="calp-card__more" href="' . esc_url( get_permalink( $p ) ) . '">' . esc_html__( 'Read more', 'calendar-plugin' ) . ' »</a></article>';
 		}
-		return $html . '</div>';
+		$html .= '</div>';
+		if ( ! $slider ) {
+			return $html;
+		}
+		wp_enqueue_script( 'calp-articles' );
+		$nav = sprintf(
+			'<div class="calp-articles__nav" hidden><button type="button" class="calp-articles__prev" aria-label="%1$s">‹</button><button type="button" class="calp-articles__next" aria-label="%2$s">›</button><button type="button" class="calp-articles__all" aria-expanded="false" data-less="%3$s">%4$s</button></div>',
+			esc_attr__( 'Previous articles', 'calendar-plugin' ),
+			esc_attr__( 'Next articles', 'calendar-plugin' ),
+			esc_attr__( 'Show less', 'calendar-plugin' ),
+			/* translators: %d: number of articles */
+			esc_html( sprintf( __( 'Show all (%d)', 'calendar-plugin' ), count( $posts ) ) )
+		);
+		return '<div class="calp-articles calp-articles--slider">' . $html . $nav . '</div>';
 	}
 
 	/** [calp_article_form] */

@@ -132,4 +132,16 @@
 .calp-card__title { font-size: 1.15em; margin: .7em 0 .2em; color: var(--calp-dark); }
 .calp-card__date { margin: 0; font-size: .85em; color: var(--calp-muted); }
 .calp-card__text { font-size: .95em; line-height: 1.45; }
+
+/* Slider: one row to swipe through; "Show all" turns it into the grid */
+.calp-articles--slider:not(.is-open) .calp-cards { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: thin; padding-bottom: 6px; }
+.calp-articles--slider:not(.is-open) .calp-card { flex: 0 0 280px; scroll-snap-align: start; }
+@media (max-width: 640px) { .calp-articles--slider:not(.is-open) .calp-card { flex-basis: 80%; } }
+.calp-articles__nav { display: flex; gap: .5em; justify-content: flex-end; align-items: center; margin-top: .8em; }
+.calp-articles__nav[hidden], .calp-articles__nav [hidden] { display: none !important; }
+.calp-articles__nav button { border: 2px solid var(--calp-dark); background: #fff; color: var(--calp-dark); border-radius: 999px; font-weight: 600; line-height: 1; cursor: pointer; }
+.calp-articles__prev, .calp-articles__next { width: 2.4em; height: 2.4em; font-size: 1.1em; padding: 0; }
+.calp-articles__all { padding: .6em 1.2em; font-size: .9em; }
+.calp-articles__nav button:hover:not(:disabled) { background: var(--calp-cream); }
+.calp-articles__nav button:disabled { opacity: .35; cursor: default; }
 .calp-card__more { font-weight: 600; font-size: .9em; text-decoration: none; color: var(--calp-dark); }
