@@ -65,9 +65,9 @@ final class Settings {
 			'mail_from_name'   => '',
 			'contact_recipients' => '',
 			'article_categories' => array(
+				'news'    => 'News',
 				'history' => 'History',
 				'blog'    => 'Blog',
-				'news'    => 'News',
 			),
 			'seeking_rep_text' => 'We are looking for a representative! Can you be this person? Please contact us.',
 			'contact_email'    => '',
