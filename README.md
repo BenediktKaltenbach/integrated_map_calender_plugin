@@ -39,7 +39,7 @@ Let the host call the cron URL hourly (All-Inkl: KAS › Tools › Cronjobs). WP
 | --- | --- |
 | `[calp_explorer tabs="map,calendar" default="map" category="" months="0"]` | Map and calendar with tabs |
 | `[calp_map height="550"]` | Map alone |
-| `[calp_events category="eurocup,championship" count="10" months="12" past="0"]` | Event list grouped by month |
+| `[calp_events category="eurocup,championship" count="10" months="12" past="0" filter="1"]` | Event list grouped by month, with category buttons |
 | `[calp_event_form]` | Suggest an event |
 | `[calp_countries contacts="1"]` | Countries as round flags, optionally with contacts |
 | `[calp_articles category="news" count="6"]` | Article cards |
@@ -69,8 +69,13 @@ Coordinates: 49.52, 17.58
 | `Status:` | `cancelled` / `postponed` / `provisional` (or German) | note; cancelled events are struck through and hidden on the map |
 | `Coordinates:` / `Koordinaten:` | `50.71, 7.13` or a Google Maps / OpenStreetMap link | exact map position |
 | `Display:` / `Anzeige:` | free text | shown instead of the date |
+| `Category:` / `Kategorie:` / `Type:` | slug or name of a category of the site | puts the event into that category (one calendar can feed several categories) |
 
 Without coordinates the location text is looked up at OpenStreetMap (Nominatim: max. 15 lookups per sync, 1 per second, cached 30 days). Events deleted in Google are only flagged; an empty feed is only trusted the second time in a row.
+
+## Filtered links
+
+The category buttons above the list put the choice into the address, e.g. `/calendar/?calp_cat=eurocup#calendar`. Use such links on other pages to open the calendar already filtered.
 
 ## Event pages
 

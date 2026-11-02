@@ -42,6 +42,7 @@ final class Explorer {
 				array(
 					'categories' => array_filter( array_map( 'sanitize_key', explode( ',', (string) $atts['category'] ) ) ),
 					'months'     => (int) $atts['months'],
+					'filter'     => true,
 				)
 			) . Form::shortcode(),
 		);

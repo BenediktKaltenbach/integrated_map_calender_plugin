@@ -138,6 +138,9 @@ final class Sync {
 				continue;
 			}
 
+			// "Category:" in the event moves it into another category of this site; the feed stays its source.
+			$category = self::category_of( (string) ( $e['fields']['category'] ?? '' ), $slug );
+
 			$result = wp_insert_post(
 				wp_slash(
 					array(
@@ -149,7 +152,8 @@ final class Sync {
 						'meta_input'   => array(
 							'_calp_source'   => 'feed',
 							'_calp_key'      => $e['key'],
-							'_calp_category' => $slug,
+							'_calp_category' => $category,
+							'_calp_feed'     => $slug,
 							'_calp_start'    => $e['start'],
 							'_calp_end'      => $e['end'],
 							'_calp_all_day'  => $e['all_day'] ? 1 : 0,
@@ -218,6 +222,19 @@ final class Sync {
 		) + $count;
 	}
 
+	/** Category slug from a "Category:" line – matched by slug or by name – else the feed's own category. */
+	private static function category_of( string $wanted, string $feed ): string {
+		if ( '' === $wanted ) {
+			return $feed;
+		}
+		foreach ( Settings::event_categories() as $slug => $c ) {
+			if ( $slug === $wanted || sanitize_title( $c['name'] ) === $wanted ) {
+				return $slug;
+			}
+		}
+		return $feed;
+	}
+
 	/**
 	 * Index of all mirrored feed events; removes duplicates (same key twice, newest kept).
 	 *
@@ -247,7 +264,8 @@ final class Sync {
 			}
 			$index[ $key ] = array(
 				'id'       => $id,
-				'category' => (string) get_post_meta( $id, '_calp_category', true ),
+				// The feed the event came from (before 0.3: the category, which was the same).
+				'category' => (string) get_post_meta( $id, '_calp_feed', true ) ?: (string) get_post_meta( $id, '_calp_category', true ),
 			);
 		}
 		return $index;

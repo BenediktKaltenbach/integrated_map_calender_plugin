@@ -6,6 +6,8 @@
 
 namespace CalendarPlugin\Events;
 
+use CalendarPlugin\Settings;
+
 final class Renderer {
 
 	/**
@@ -18,6 +20,7 @@ final class Renderer {
 				'count'    => 0,
 				'months'   => 0,
 				'past'     => '0',
+				'filter'   => '1',
 			),
 			$atts,
 			'calp_events'
@@ -29,6 +32,7 @@ final class Renderer {
 				'count'      => (int) $atts['count'],
 				'months'     => (int) $atts['months'],
 				'past'       => filter_var( $atts['past'], FILTER_VALIDATE_BOOLEAN ),
+				'filter'     => filter_var( $atts['filter'], FILTER_VALIDATE_BOOLEAN ),
 			)
 		);
 	}
@@ -81,13 +85,17 @@ final class Renderer {
 	}
 
 	public static function list( array $args ): string {
+		$buttons = '';
+		if ( ! empty( $args['filter'] ) ) {
+			[ $args, $buttons ] = self::filter( $args );
+		}
 		$ids = self::query( $args );
 		if ( ! $ids ) {
-			return '<p class="calp-empty">' . esc_html__( 'There are no upcoming events at the moment.', 'calendar-plugin' ) . '</p>';
+			return $buttons . '<p class="calp-empty">' . esc_html( ! empty( $args['filtered'] ) ? __( 'There are no upcoming events in this category at the moment.', 'calendar-plugin' ) : __( 'There are no upcoming events at the moment.', 'calendar-plugin' ) ) . '</p>';
 		}
 		$tz    = Format::tz();
 		$month = '';
-		$html  = '<div class="calp-events">';
+		$html  = $buttons . '<div class="calp-events">';
 		foreach ( $ids as $id ) {
 			$d = Events::data( $id );
 			$m = wp_date( 'F Y', $d['start'], $tz );
@@ -98,6 +106,35 @@ final class Renderer {
 			$html .= self::item( $id, $d );
 		}
 		return $html . '</ul></div>';
+	}
+
+	/**
+	 * Category buttons above the list. The choice is in the address (?calp_cat=eurocup), so links
+	 * from other pages can open the list already filtered, and it works without JavaScript.
+	 *
+	 * @return array{0: array, 1: string} narrowed query args, HTML of the buttons
+	 */
+	private static function filter( array $args ): array {
+		$all     = Settings::event_categories();
+		$allowed = ! empty( $args['categories'] ) ? array_values( array_intersect( $args['categories'], array_keys( $all ) ) ) : array_keys( $all );
+		if ( count( $allowed ) < 2 ) {
+			return array( $args, '' );
+		}
+		$active = sanitize_key( wp_unslash( $_GET['calp_cat'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification -- read-only filter.
+		if ( in_array( $active, $allowed, true ) ) {
+			$args['categories'] = array( $active );
+			$args['filtered']   = true;
+		} else {
+			$active = '';
+		}
+		$link = static fn( string $cat ) => esc_url( ( '' === $cat ? remove_query_arg( 'calp_cat' ) : add_query_arg( 'calp_cat', $cat ) ) . '#calendar' );
+		$html = '<nav class="calp-filter" aria-label="' . esc_attr__( 'Filter by category', 'calendar-plugin' ) . '">';
+		$html .= '<a class="calp-filter__btn' . ( '' === $active ? ' is-active' : '' ) . '" href="' . $link( '' ) . '"' . ( '' === $active ? ' aria-current="true"' : '' ) . '>' . esc_html__( 'All', 'calendar-plugin' ) . '</a>';
+		foreach ( $allowed as $slug ) {
+			$on    = $slug === $active;
+			$html .= '<a class="calp-filter__btn' . ( $on ? ' is-active' : '' ) . '" style="--calp-cat:' . esc_attr( $all[ $slug ]['color'] ) . '" href="' . $link( $slug ) . '"' . ( $on ? ' aria-current="true"' : '' ) . '>' . esc_html( $all[ $slug ]['name'] ) . '</a>';
+		}
+		return array( $args, $html . '</nav>' );
 	}
 
 	private static function item( int $id, array $d ): string {

@@ -36,6 +36,10 @@ final class Parser {
 		'karte'        => 'coordinates',
 		'display'      => 'display',
 		'anzeige'      => 'display',
+		'category'     => 'category',
+		'kategorie'    => 'category',
+		'type'         => 'category',
+		'typ'          => 'category',
 	);
 
 	private const STATUS = array(
@@ -173,6 +177,11 @@ final class Parser {
 			case 'coordinates':
 				// Numbers or a map link; resolved in Geo (short links need a request).
 				return $value;
+
+			case 'category':
+				// Slug or name of a category of this site; checked against the settings during sync.
+				$slug = trim( (string) preg_replace( '/[^a-z0-9]+/', '-', strtr( mb_strtolower( $value, 'UTF-8' ), array( 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss' ) ) ), '-' );
+				return '' !== $slug ? mb_substr( $slug, 0, 40 ) : null;
 
 			case 'class':
 				return mb_substr( $value, 0, 30, 'UTF-8' );

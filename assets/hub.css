@@ -76,6 +76,15 @@
 	.calp-eventinfo__list dd { margin-bottom: .6em; }
 }
 
+/* ── Category filter ─────────────────────────────────────────────── */
+.calp-filter { display: flex; flex-wrap: wrap; gap: .4em; margin: 0 0 .6em; }
+.calp-filter__btn { display: inline-flex; align-items: center; gap: .4em; padding: .3em .85em; border: 2px solid var(--calp-cat, var(--calp-dark)); border-radius: 999px; color: var(--calp-dark) !important; background: #fff; text-decoration: none !important; font-weight: 600; font-size: .9em; line-height: 1.4; }
+.calp-filter__btn::before { content: ""; width: .65em; height: .65em; border-radius: 50%; background: var(--calp-cat, var(--calp-dark)); }
+.calp-filter__btn:first-child::before { display: none; }
+.calp-filter__btn:hover { background: var(--calp-cream); }
+.calp-filter__btn.is-active { background: var(--calp-cat, var(--calp-dark)); color: #fff !important; }
+.calp-filter__btn.is-active::before { background: #fff; }
+
 /* ── Explorer tabs ───────────────────────────────────────────────── */
 .calp-tabs { display: flex; gap: .3em; border-bottom: 4px solid var(--calp-accent); margin-bottom: 1.2em; }
 .calp-tab { padding: .55em 1.4em; border-radius: 6px 6px 0 0; background: var(--calp-cream); color: var(--calp-dark) !important; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; text-decoration: none !important; }

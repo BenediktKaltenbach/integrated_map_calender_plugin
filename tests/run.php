@@ -41,6 +41,9 @@ namespace {
 	$check( 'status german', $p['fields']['status'] ?? '', 'cancelled' );
 	$check( 'unknown key warns', count( $p['warnings'] ), 1 );
 
+	$p = Parser::description( "Race\n---\nTyp: Weltmeisterschaft 2027" );
+	$check( 'category slug', $p['fields']['category'] ?? '', 'weltmeisterschaft-2027' );
+
 	$p = Parser::description( "Text\nInfo: www.footbikesport.eu" );
 	$check( 'without separator', $p['fields']['info'] ?? '', 'https://www.footbikesport.eu' );
 	$check( 'html links', Parser::html_to_text( '<a href="https://a.b/c">https://a.b/c</a><br>x' ), "https://a.b/c\nx" );
