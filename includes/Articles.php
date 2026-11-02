@@ -150,10 +150,9 @@ final class Articles {
 				<input type="hidden" name="calp_t" value="<?php echo esc_attr( $time . '.' . self::sign( $time ) ); ?>">
 				<?php echo Plugin::form_fields(); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside. ?>
 				<div class="calp-form__row">
-					<p><label><?php esc_html_e( 'First name', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[first_name]" required maxlength="50" autocomplete="given-name"></label></p>
-					<p><label><?php esc_html_e( 'Last name', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[last_name]" required maxlength="50" autocomplete="family-name"></label></p>
+					<p><label><?php esc_html_e( 'First and last name', 'calendar-plugin' ); ?> *<br><input type="text" name="calp[name]" required maxlength="80" autocomplete="name"></label></p>
+					<p><label><?php esc_html_e( 'Your e-mail', 'calendar-plugin' ); ?> *<br><input type="email" name="calp[email]" required autocomplete="email"></label></p>
 				</div>
-				<p><label><?php esc_html_e( 'Your e-mail', 'calendar-plugin' ); ?> *<br><input type="email" name="calp[email]" required autocomplete="email"></label></p>
 				<p><label><?php esc_html_e( 'Category', 'calendar-plugin' ); ?><br><select name="calp[category]">
 					<?php foreach ( (array) Settings::get()['article_categories'] as $slug => $name ) : ?>
 						<option value="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $name ); ?></option>
@@ -196,10 +195,7 @@ final class Articles {
 		if ( Plugin::rate_limited( 'article', 3 ) ) {
 			$fail( __( 'Too many submissions from your connection. Please try again later.', 'calendar-plugin' ) );
 		}
-		// First and last name, so the article can name its author in full.
-		$first = sanitize_text_field( $in['first_name'] ?? '' );
-		$last  = sanitize_text_field( $in['last_name'] ?? '' );
-		$name  = '' !== $first && '' !== $last ? $first . ' ' . $last : '';
+		$name  = sanitize_text_field( $in['name'] ?? '' );
 		$email = sanitize_email( $in['email'] ?? '' );
 		$title = sanitize_text_field( $in['title'] ?? '' );
 		$text  = wp_kses_post( $in['content'] ?? '' );
