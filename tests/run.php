@@ -11,6 +11,7 @@ namespace {
 	require __DIR__ . '/../includes/Events/Format.php';
 	require __DIR__ . '/../includes/Events/Parser.php';
 	require __DIR__ . '/../includes/Events/Feed.php';
+	require __DIR__ . '/../includes/Events/Bridge.php';
 }
 
 namespace CalendarPlugin\Events {
@@ -20,6 +21,7 @@ namespace CalendarPlugin\Events {
 }
 
 namespace {
+	use CalendarPlugin\Events\Bridge;
 	use CalendarPlugin\Events\Feed;
 	use CalendarPlugin\Events\Parser;
 
@@ -56,6 +58,41 @@ namespace {
 	$wm = array_values( array_filter( $f['events'], static fn( $e ) => 'World Championships' === $e['title'] ) )[0];
 	$check( 'all day', $wm['all_day'], true );
 	$check( 'feed country', $wm['fields']['country'] ?? '', 'CZ' );
+
+
+	// Bridge: legacy calendar <-> category calendars.
+	$ev   = static fn( string $id, string $title, string $day, array $more = array() ) => array( 'id' => $id, 'summary' => $title, 'start' => array( 'date' => $day ), 'end' => array( 'date' => $day ) ) + $more;
+	$copy = static fn( array $e, string $id, string $src, ?string $hash = null ) => array_merge( $e, array( 'id' => $id, 'extendedProperties' => array( 'private' => array( 'calp_src' => $src, 'calp_hash' => $hash ?? Bridge::hash( $e ) ) ) ) );
+	$rules = Bridge::rules( "eurocup = eurocup\nworld = nowhere\n* = other" );
+	$safe  = array( strtotime( '2026-01-01' ), strtotime( '2029-01-01' ) );
+	$do    = static fn( array $actions ) => array_map( static fn( $a ) => $a['do'] . ' ' . $a['calendar'] . ' ' . $a['title'], $actions );
+
+	$l1 = $ev( 'L1', 'Eurocup Lyon', '2027-05-08' );
+	$l2 = $ev( 'L2', 'Czech cup Pilsen', '2027-06-01' );
+	$check( 'bridge: legacy events by rule', $do( Bridge::plan( array( $l1, $l2 ), array( 'eurocup' => array(), 'other' => array() ), $rules, false, $safe ) ), array( 'insert eurocup Eurocup Lyon', 'insert other Czech cup Pilsen' ) );
+	$check( 'bridge: rule without calendar is skipped', Bridge::plan( array( $ev( 'L3', 'World Cup', '2027-07-01' ) ), array( 'other' => array() ), $rules, false, $safe )[0]['do'], 'skip' );
+
+	// Copy already there (and moved by hand to "championship"): nothing, or an update where it is now.
+	$c1 = $copy( $l1, 'C1', 'L1' );
+	$check( 'bridge: unchanged copy', Bridge::plan( array( $l1 ), array( 'eurocup' => array(), 'championship' => array( $c1 ) ), $rules, false, $safe ), array() );
+	$l1b = array_merge( $l1, array( 'location' => 'Lyon, France' ) );
+	$check( 'bridge: changed original updates the moved copy', $do( Bridge::plan( array( $l1b ), array( 'eurocup' => array(), 'championship' => array( $c1 ) ), $rules, false, $safe ) ), array( 'patch championship Eurocup Lyon' ) );
+
+	// Categories -> legacy only with write access; no loop for copies.
+	$k1 = $ev( 'K1', 'Eurocup Liberec', '2027-08-28' );
+	$check( 'bridge: category -> legacy', $do( Bridge::plan( array(), array( 'eurocup' => array( $k1 ) ), $rules, true, $safe ) ), array( 'insert _legacy Eurocup Liberec' ) );
+	$check( 'bridge: legacy read-only', Bridge::plan( array(), array( 'eurocup' => array( $k1 ) ), $rules, false, $safe ), array() );
+	$check( 'bridge: no ping-pong', Bridge::plan( array( $copy( $k1, 'X1', 'K1' ) ), array( 'eurocup' => array( $k1 ) ), $rules, true, $safe ), array() );
+
+	// Deleting.
+	$check( 'bridge: deleted original deletes copy', $do( Bridge::plan( array( array( 'id' => 'L1', 'status' => 'cancelled' ) ), array( 'eurocup' => array( $copy( $l1, 'C1', 'L1' ) ) ), $rules, false, $safe ) ), array( 'delete eurocup Eurocup Lyon' ) );
+	$check( 'bridge: missing original inside safe period', $do( Bridge::plan( array( $copy( $k1, 'X1', 'K1' ) ), array( 'eurocup' => array() ), $rules, true, $safe ) ), array( 'delete _legacy Eurocup Liberec' ) );
+	$old = $ev( 'K9', 'Old race', '2025-06-01' );
+	$check( 'bridge: missing original outside safe period kept', Bridge::plan( array( $copy( $old, 'X9', 'K9' ) ), array( 'eurocup' => array() ), $rules, true, $safe ), array() );
+	$check( 'bridge: legacy copies not deleted without write access', Bridge::plan( array( $copy( $k1, 'X1', 'K1' ) ), array( 'eurocup' => array() ), $rules, false, $safe ), array() );
+
+	// Entered by hand in both places: no duplicate.
+	$check( 'bridge: same title same day is skipped', Bridge::plan( array( $l1 ), array( 'eurocup' => array( $ev( 'K2', ' eurocup  LYON', '2027-05-08' ) ) ), $rules, false, $safe )[0]['do'], 'skip' );
 
 	echo $fails ? "\n$fails failed\n" : "\nall passed\n";
 	exit( $fails ? 1 : 0 );

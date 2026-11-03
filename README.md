@@ -73,6 +73,30 @@ Coordinates: 49.52, 17.58
 
 Without coordinates the location text is looked up at OpenStreetMap (Nominatim: max. 15 lookups per sync, 1 per second, cached 30 days). Events deleted in Google are only flagged; an empty feed is only trusted the second time in a row.
 
+## Legacy calendar (two-way copy)
+
+For a Google Calendar that other websites have embedded for years and that should keep working
+next to the new category calendars (Settings › Calendar Plugin › Legacy calendar):
+
+- **Legacy → categories:** every event entered in the legacy calendar is copied into one category
+  calendar, chosen by rules on its title (`eurocup = eurocup`, `* = other`).
+- **Categories → legacy:** every event entered in a category calendar is copied into the legacy
+  calendar (needs write access to it; without, only the first direction runs).
+- Copies remember their original (private extended property `calp_src`, kept by Google when an
+  event is moved). Moving a copy to another category calendar in Google changes its category.
+- Changes at the original update the copy; deleting the original deletes the copy. Edit events
+  where they were entered. An event with the same title on the same day already in the target
+  is not copied again.
+- "Preview" lists what would happen without changing anything; "Automatic" runs it with every
+  hourly sync, before the category calendars are read.
+
+Needs a Google service account (Calendar API on) with every calendar shared to it
+("Make changes to events"); key in `wp-config.php`:
+
+```php
+define( 'CALP_GOOGLE_KEY_FILE', '/path/outside/the/webroot/calendar-google.json' );
+```
+
 ## Filtered links
 
 The category buttons above the list put the choice into the address, e.g. `/calendar/?calp_cat=eurocup#calendar`. Use such links on other pages to open the calendar already filtered.

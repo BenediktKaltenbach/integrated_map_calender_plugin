@@ -64,6 +64,8 @@ final class Sync {
 
 		$status = array();
 		try {
+			// First the copy between legacy and category calendars, so the site reads the result.
+			Bridge::scheduled();
 			self::$index = self::index();
 			foreach ( Settings::event_categories() as $slug => $c ) {
 				if ( '' === $c['ical'] ) {

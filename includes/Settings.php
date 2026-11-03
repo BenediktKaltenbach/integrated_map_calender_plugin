@@ -6,6 +6,8 @@
 
 namespace CalendarPlugin;
 
+use CalendarPlugin\Events\Bridge;
+use CalendarPlugin\Events\Google;
 use CalendarPlugin\Events\Sync;
 
 final class Settings {
@@ -48,6 +50,10 @@ final class Settings {
 					'on_map' => 1,
 				),
 			),
+			'legacy_calendar'  => '',
+			'bridge'           => 0,
+			'bridge_rules'     => "eurocup = eurocup
+* = other",
 			'event_form'       => 1,
 			'event_pages'      => 1,
 			'event_page_parent' => 0,
@@ -123,6 +129,7 @@ final class Settings {
 		add_action( 'admin_menu', array( self::class, 'menu' ) );
 		add_action( 'admin_init', array( self::class, 'register' ) );
 		add_action( 'admin_post_calp_sync_now', array( self::class, 'sync_now' ) );
+		add_action( 'admin_post_calp_bridge', array( self::class, 'bridge_now' ) );
 		add_action( 'admin_post_calp_import_iksa', array( self::class, 'import_iksa' ) );
 	}
 
@@ -145,6 +152,7 @@ final class Settings {
 	private static function tabs(): array {
 		return array(
 			'events'   => __( 'Events', 'calendar-plugin' ),
+			'bridge'   => __( 'Legacy calendar', 'calendar-plugin' ),
 			'map'      => __( 'Map', 'calendar-plugin' ),
 			'review'   => __( 'Review', 'calendar-plugin' ),
 			'content'  => __( 'Countries & articles', 'calendar-plugin' ),
@@ -180,6 +188,13 @@ final class Settings {
 			$s['event_form']        = empty( $in['event_form'] ) ? 0 : 1;
 			$s['event_pages']       = empty( $in['event_pages'] ) ? 0 : 1;
 			$s['event_page_parent'] = absint( $in['event_page_parent'] ?? 0 );
+		}
+
+		if ( 'bridge' === $tab ) {
+			$legacy               = trim( (string) ( $in['legacy_calendar'] ?? '' ) );
+			$s['legacy_calendar'] = '' !== Google::calendar_id( $legacy ) ? preg_replace( '#^webcal://#i', 'https://', $legacy ) : '';
+			$s['bridge']          = empty( $in['bridge'] ) ? 0 : 1;
+			$s['bridge_rules']    = sanitize_textarea_field( $in['bridge_rules'] ?? '' );
 		}
 
 		if ( 'map' === $tab ) {
@@ -300,6 +315,27 @@ final class Settings {
 			echo '</label></p><p class="description">' . esc_html__( 'E.g. the calendar page, so event addresses read /calendar/event-name/ and new pages are not added to menus automatically.', 'calendar-plugin' ) . '</p>';
 		}
 
+		if ( 'bridge' === $tab ) {
+			echo '<p>' . esc_html__( 'Keeps a shared legacy Google Calendar (the one other websites have embedded) and the category calendars in step: events entered in the legacy calendar are copied into one category calendar by the rules below, and events entered in a category calendar are copied into the legacy calendar. To change the category of an event, move it to another calendar in Google ("Calendar" field of the event). Edit events where they were entered; deleting there deletes the copy.', 'calendar-plugin' ) . '</p>';
+			echo '<table class="form-table">';
+			printf( '<tr><th>%s</th><td><input type="text" class="large-text" name="%s" value="%s" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"><p class="description">%s</p></td></tr>', esc_html__( 'Legacy calendar', 'calendar-plugin' ), $n( 'legacy_calendar' ), esc_attr( (string) $s['legacy_calendar'] ), esc_html__( 'iCal address or calendar ID. Do not also enter it as the calendar of a category – the categories get their own calendars.', 'calendar-plugin' ) );
+			printf( '<tr><th>%s</th><td><textarea rows="4" cols="40" name="%s">%s</textarea><p class="description">%s</p></td></tr>', esc_html__( 'Rules', 'calendar-plugin' ), $n( 'bridge_rules' ), esc_textarea( (string) $s['bridge_rules'] ), esc_html__( 'Category for events from the legacy calendar: "word in the title = category slug", one per line, the first fitting rule wins. "* = slug" for everything else.', 'calendar-plugin' ) );
+			printf( '<tr><th>%s</th><td><label><input type="checkbox" name="%s" value="1"%s> %s</label></td></tr>', esc_html__( 'Automatic', 'calendar-plugin' ), $n( 'bridge' ), checked( ! empty( $s['bridge'] ), true, false ), esc_html__( 'Copy with every sync (hourly). Check the preview first.', 'calendar-plugin' ) );
+			echo '</table>';
+
+			echo '<h2>' . esc_html__( 'Google service account', 'calendar-plugin' ) . '</h2>';
+			$key = Google::read();
+			if ( Google::configured() ) {
+				printf( '<p>✅ %s <code>%s</code></p>', esc_html__( 'Set up. Share the legacy calendar and every category calendar with', 'calendar-plugin' ), esc_html( Google::account() ) );
+				echo '<p class="description">' . esc_html__( 'Google Calendar › settings of the calendar › "Share with specific people" › add the address › "Make changes to events". Without write access to the legacy calendar only legacy → categories runs.', 'calendar-plugin' ) . '</p>';
+			} elseif ( '' !== $key['problem'] ) {
+				echo '<div class="notice notice-error inline"><p>' . esc_html( $key['problem'] ) . '</p></div>';
+			} else {
+				echo '<p>' . esc_html__( 'Not set up yet. Create a service account in a Google Cloud project with the Google Calendar API switched on, download its key (JSON) and add this line to wp-config.php, with the file outside the web folder:', 'calendar-plugin' ) . '</p>';
+				echo "<pre>define( 'CALP_GOOGLE_KEY_FILE', '/path/outside/the/webroot/calendar-google.json' );</pre>";
+			}
+		}
+
 		if ( 'map' === $tab ) {
 			echo '<table class="form-table">';
 			printf( '<tr><th>%s</th><td><input type="number" step="0.0001" name="%s" value="%s"> / <input type="number" step="0.0001" name="%s" value="%s"></td></tr>', esc_html__( 'Map centre (lat / lng)', 'calendar-plugin' ), $n( 'map_lat' ), esc_attr( $s['map_lat'] ), $n( 'map_lng' ), esc_attr( $s['map_lng'] ) );
@@ -345,7 +381,68 @@ final class Settings {
 		}
 
 		submit_button();
-		echo '</form></div>';
+		echo '</form>';
+		if ( 'bridge' === $tab ) {
+			self::bridge_tools();
+		}
+		echo '</div>';
+	}
+
+	/** Preview / copy buttons and the result of the last run (outside the settings form). */
+	private static function bridge_tools(): void {
+		echo '<hr><h2>' . esc_html__( 'Run', 'calendar-plugin' ) . '</h2><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="calp_bridge">';
+		wp_nonce_field( 'calp_bridge' );
+		submit_button( __( 'Preview (changes nothing)', 'calendar-plugin' ), 'secondary', 'dry', false );
+		echo ' ';
+		submit_button( __( 'Copy now', 'calendar-plugin' ), 'primary', 'run', false );
+		echo '</form>';
+
+		$shown  = array(
+			__( 'Last preview', 'calendar-plugin' ) => get_transient( 'calp_bridge_preview' ),
+			__( 'Last run', 'calendar-plugin' )     => get_option( Bridge::OPTION_STATUS ),
+		);
+		$labels = array(
+			'insert' => __( 'new', 'calendar-plugin' ),
+			'patch'  => __( 'update', 'calendar-plugin' ),
+			'delete' => __( 'delete', 'calendar-plugin' ),
+			'skip'   => __( 'skip', 'calendar-plugin' ),
+		);
+		foreach ( $shown as $title => $r ) {
+			if ( ! is_array( $r ) ) {
+				continue;
+			}
+			printf( '<h3>%s · %s</h3><p>%s %s</p>', esc_html( $title ), esc_html( wp_date( 'd.m.Y H:i', (int) $r['time'] ) ), ! empty( $r['ok'] ) ? '✅' : '⚠', esc_html( $r['message'] ) );
+			if ( empty( $r['actions'] ) ) {
+				continue;
+			}
+			echo '<table class="widefat striped" style="max-width:900px"><thead><tr><th>' . esc_html__( 'Action', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'Calendar', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'Event', 'calendar-plugin' ) . '</th><th>' . esc_html__( 'Note', 'calendar-plugin' ) . '</th></tr></thead><tbody>';
+			foreach ( array_slice( $r['actions'], 0, 200 ) as $a ) {
+				printf(
+					'<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+					esc_html( $labels[ $a['do'] ] ?? $a['do'] ),
+					esc_html( Bridge::LEGACY === $a['calendar'] ? __( 'legacy calendar', 'calendar-plugin' ) : $a['calendar'] ),
+					esc_html( $a['title'] ),
+					esc_html( $a['note'] ?? '' )
+				);
+			}
+			echo '</tbody></table>';
+		}
+	}
+
+	public static function bridge_now(): void {
+		check_admin_referer( 'calp_bridge' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '', 403 );
+		}
+		$dry = isset( $_POST['dry'] );
+		$r   = Bridge::run( $dry );
+		if ( $dry ) {
+			set_transient( 'calp_bridge_preview', $r, DAY_IN_SECONDS );
+		} else {
+			update_option( Bridge::OPTION_STATUS, $r, false );
+		}
+		wp_safe_redirect( admin_url( 'options-general.php?page=' . self::PAGE . '&tab=bridge&calp_msg=' . rawurlencode( $r['message'] ) ) );
+		exit;
 	}
 
 	private static function page_help(): void {
