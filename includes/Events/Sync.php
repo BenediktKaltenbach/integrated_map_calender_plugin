@@ -20,7 +20,7 @@ final class Sync {
 	 * All mirrored feed events: key → [id, category]. Across categories, so an event moved to
 	 * another calendar in Google (same UID) only changes its category.
 	 *
-	 * @var array<string, array{id: int, category: string}>
+	 * @var array<string, array{id: int, category: string, twin?: string}>
 	 */
 	private static array $index = array();
 
@@ -129,10 +129,14 @@ final class Sync {
 			'removed' => 0,
 		);
 		$seen   = array();
+		$here   = array_flip( array_column( $events, 'key' ) );
 
 		foreach ( $events as $e ) {
 			$seen[ $e['key'] ] = true;
 			$entry             = self::$index[ $e['key'] ] ?? null;
+			if ( null === $entry ) {
+				$entry = self::adopt( $e, $here );
+			}
 			$id                = $entry['id'] ?? 0;
 			$hash              = md5( wp_json_encode( $e ) );
 
@@ -177,6 +181,7 @@ final class Sync {
 			self::$index[ $e['key'] ] = array(
 				'id'       => $result,
 				'category' => $slug,
+				'twin'     => self::twin( (string) $e['title'], (int) $e['start'] ),
 			);
 			++$count[ $id ? 'changed' : 'new' ];
 		}
@@ -224,6 +229,26 @@ final class Sync {
 		) + $count;
 	}
 
+	/**
+	 * A new calendar event with the same title and start as an event already on the site (that is
+	 * not in this feed) is the same event under a new ID – e.g. copied into another calendar by the
+	 * legacy calendar copy. It takes over the existing post, so its page, picture and place stay.
+	 */
+	private static function adopt( array $e, array $here ): ?array {
+		$twin = self::twin( (string) $e['title'], (int) $e['start'] );
+		foreach ( self::$index as $key => $entry ) {
+			if ( ( $entry['twin'] ?? '' ) === $twin && ! isset( $here[ $key ] ) ) {
+				unset( self::$index[ $key ] );
+				return $entry;
+			}
+		}
+		return null;
+	}
+
+	private static function twin( string $title, int $start ): string {
+		return mb_strtolower( trim( (string) preg_replace( '/\s+/', ' ', $title ) ) ) . '|' . $start;
+	}
+
 	/** Category slug from a "Category:" line – matched by slug or by name – else the feed's own category. */
 	private static function category_of( string $wanted, string $feed ): string {
 		if ( '' === $wanted ) {
@@ -240,7 +265,7 @@ final class Sync {
 	/**
 	 * Index of all mirrored feed events; removes duplicates (same key twice, newest kept).
 	 *
-	 * @return array<string, array{id: int, category: string}>
+	 * @return array<string, array{id: int, category: string, twin: string}>
 	 */
 	private static function index(): array {
 		$ids = get_posts(
@@ -266,6 +291,7 @@ final class Sync {
 			}
 			$index[ $key ] = array(
 				'id'       => $id,
+				'twin'     => self::twin( (string) get_post_field( 'post_title', $id ), (int) get_post_meta( $id, '_calp_start', true ) ),
 				// The feed the event came from (before 0.3: the category, which was the same).
 				'category' => (string) get_post_meta( $id, '_calp_feed', true ) ?: (string) get_post_meta( $id, '_calp_category', true ),
 			);
