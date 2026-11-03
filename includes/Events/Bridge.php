@@ -31,7 +31,7 @@ final class Bridge {
 
 	private const SRC        = 'calp_src';
 	private const HASH       = 'calp_hash';
-	private const PAST_DAYS  = 60;
+	private const PAST_DAYS  = 370; // The site keeps a year of past events (Sync), so copy those too.
 	private const YEARS      = 3;
 	private const MAX_WRITES = 100;
 	private const FIELDS     = array( 'summary', 'description', 'location', 'start', 'end', 'recurrence' );
